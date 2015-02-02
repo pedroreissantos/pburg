@@ -1,0 +1,155 @@
+%{
+#include <stdio.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+
+static const char *name[] = { "eax", "ecx", "edx", "ebx", "esi", "edi", "no-reg" };
+static int busy[6];
+static int getReg();
+
+enum {ASSIGN=100, CONST=101, VAR=102, PLUS=103, MINUS=104, UMINUS=105 };
+
+#define STATE_TYPE void*
+typedef struct tree {
+	int op;
+	int place;
+	struct tree *kids[2];
+	STATE_TYPE state_label;
+} *NODEPTR_TYPE;
+#define OP_LABEL(p) ((p)->op)
+#define LEFT_CHILD(p) ((p)->kids[0])
+#define RIGHT_CHILD(p) ((p)->kids[1])
+#define STATE_LABEL(p) ((p)->state_label)
+%}
+
+%term ASSIGN=100 CONST=101 VAR=102 PLUS=103 MINUS=104 UMINUS=105
+%%
+stat:  ASSIGN(VAR,reg)   19 {
+	   	printf(" mov var, %s\n", name[RIGHT_CHILD(p)->place]);
+		busy[RIGHT_CHILD(p)->place]=0; /* liberta registo filho 1 */ }
+stat:  ASSIGN(VAR,CONST) 20 { printf(" mov var, const\n"); }
+
+reg:   mem               18 {
+		printf(" mov %s, mem\n", name[p->place = getReg()]); }
+reg:   VAR               18 {
+		printf(" mov %s, var\n", name[p->place = getReg()]); }
+reg:   CONST             4 {
+		printf(" mov %s, const\n", name[p->place = getReg()]); }
+reg:   PLUS(reg,reg)     3 {
+	   	printf(" add %s, %s\n", name[p->place=LEFT_CHILD(p)->place],
+					name[RIGHT_CHILD(p)->place]);
+		busy[RIGHT_CHILD(p)->place]=0; }
+reg:   PLUS(reg,CONST)   4 {
+	   	printf(" add %s, const\n", name[p->place=LEFT_CHILD(p)->place]); }
+reg:   PLUS(reg,mem)     19 {
+	   	printf(" add %s, mem\n", name[p->place=LEFT_CHILD(p)->place]); }
+reg:   MINUS(reg,reg)    3 {
+	   	printf(" sub %s, %s\n", name[p->place=LEFT_CHILD(p)->place],
+					name[RIGHT_CHILD(p)->place]);
+		busy[RIGHT_CHILD(p)->place]=0; }
+reg:   MINUS(reg,CONST)  4 {
+	   	printf(" sub %s, const\n", name[p->place=LEFT_CHILD(p)->place]); }
+reg:   MINUS(reg,mem)    19 {
+	   	printf(" sub %s, mem\n", name[p->place=LEFT_CHILD(p)->place]); }
+reg:   UMINUS(reg)       3 {
+	   	printf(" neg %s\n", name[p->place=LEFT_CHILD(p)->place]); }
+
+mem:   reg               19 {
+	   	printf(" mov mem, %s\n", name[LEFT_CHILD(p)->place]);
+		busy[LEFT_CHILD(p)->place]=0; /* liberta registo filho 1 */ }
+mem:   CONST             20 { printf(" mov mem, const\n"); }
+mem:   PLUS(mem,reg)     30 {
+	   	printf(" add mem, %s\n", name[RIGHT_CHILD(p)->place]);
+		busy[RIGHT_CHILD(p)->place]=0; /* liberta registo filho 1 */ }
+mem:   PLUS(mem,CONST)   31 { printf(" add mem, const\n"); }
+mem:   MINUS(mem,reg)    30 {
+	   	printf(" sub mem, %s\n", name[RIGHT_CHILD(p)->place]);
+		busy[RIGHT_CHILD(p)->place]=0; /* liberta registo filho 1 */ }
+mem:   MINUS(mem,CONST)  31 { printf(" sub mem, const\n"); }
+mem:   UMINUS(mem)       30 { printf(" neg mem\n"); }
+%%
+
+static int getReg()
+{
+  unsigned int i;
+
+  for(i = 0; i < sizeof(busy); i++)
+    if (busy[i] == 0) {
+      busy[i] = 1;
+      return i;
+    }
+  fprintf(stderr,"Registos esgotados\n");
+  return sizeof(busy) + 1;
+}
+
+static NODEPTR_TYPE tree(int op, NODEPTR_TYPE l, NODEPTR_TYPE r) {
+	NODEPTR_TYPE p = (NODEPTR_TYPE)malloc(sizeof *p);
+
+	assert(p);
+	OP_LABEL(p) = op;
+	LEFT_CHILD(p) = l;
+	RIGHT_CHILD(p) = r;
+	STATE_LABEL(p) = 0;
+	return p;
+}
+
+int main(void) {
+	NODEPTR_TYPE p;
+
+	p = tree(ASSIGN,
+		 tree(VAR,NULL,NULL),
+		 tree(CONST, NULL, NULL)
+                );
+	yyselect(p);
+ 
+printf("***\n");
+
+	p = tree(ASSIGN,
+		 tree(VAR,NULL,NULL),
+		 tree(VAR, NULL, NULL)
+                );
+	yyselect(p);
+ 
+printf("***\n");
+	p = tree(ASSIGN,
+		 tree(VAR,NULL,NULL),
+		 tree(PLUS,
+                      tree(UMINUS,tree(VAR, NULL,NULL),NULL),
+		      tree(CONST, NULL, NULL)
+                     )
+                );
+	yyselect(p);
+
+printf("***\n");
+	p = tree(ASSIGN,
+		 tree(VAR,NULL,NULL),
+		 tree(MINUS,
+                      tree(PLUS,
+			tree(VAR, NULL,NULL),
+			tree(MINUS,
+			   tree(VAR, NULL,NULL),
+			   tree(CONST, NULL, NULL)
+			    )
+		      ),
+		      tree(PLUS,tree(VAR, NULL,NULL),tree(VAR, NULL,NULL))
+                     )
+                );
+	yyselect(p);
+
+printf("***\n");
+	p = tree(MINUS,
+                      tree(PLUS,
+			tree(VAR, NULL,NULL),
+			tree(MINUS,
+			   tree(VAR, NULL,NULL),
+			   tree(CONST, NULL, NULL)
+			    )
+		      ),
+		      tree(PLUS,tree(VAR, NULL,NULL),tree(VAR, NULL,NULL))
+                     );
+	yyselect(p);
+printf("(previous tree does not match a \"stat\" since the top node (MINUS) only derives a \"reg\")\n");
+
+	return 0;
+}

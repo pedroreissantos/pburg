@@ -1,0 +1,346 @@
+.TH PBURG 1 "local \- 27/01/2014"
+
+.\" $Id: pburg.1,v 2.4 2014/01/27 19:52:18 prs Exp $
+
+.SH NAME
+
+pburg \- variable cost code-generator generator
+
+.SH SYNOPSIS
+
+.B pburg 
+[
+.I option
+]  ...  [ [
+.I input
+]
+.I output
+]
+
+.br
+
+.SH DESCRIPTION
+
+.PP
+
+.I pburg
+reads a BURG specification from
+.I input
+and writes a pattern-matching code generator to
+.IR output .
+
+If
+.I input
+is `\-' or is omitted,
+.I pburg
+reads the standard input;
+
+If
+.I output
+is `\-',
+.I pburg
+writes to the standard output.
+
+If
+.I output
+is omitted,
+.I pburg
+writes to a file named
+.I yyselect.c
+.
+
+.PP
+
+.I pburg
+accepts specifications that conform to the following EBNF grammar.
+
+Terminals are enclosed in single quotes or are
+given in uppercase, all other symbols are nonterminals or English phrases,
+{X} denotes zero or more instances of X, and [X] denotes an optional X.
+
+.PP
+
+.nf
+
+.RS
+
+.ft CW
+spec:     `%{' config `%}' { decl } `%%' { rule } [ `%%' C code ]
+
+decl:      `%start' nonterm
+           `%term' { ID `=' init }
+           `%include' `"' filename `"'
+
+init:     INT
+          `'' CHAR `''
+
+rule:     nonterm `:' tree [ cost ] [ `{' C code `}' ]
+
+tree:     term `(' tree `,' tree `)'
+          term `(' tree `)'
+          term
+          nonterm
+
+nonterm:  ID
+
+cost:     INT
+          ID
+
+.RE
+
+.fi
+
+.PP
+
+Specifications are structurally similar to
+.IR yacc 's.
+Text between
+`\f(CW%{\fP'
+and
+`\f(CW%}\fP'
+is called the configuration section; there may be several such segments.
+All are concatenated and copied verbatim into the head of the output.
+Text after the second
+`\f(CW%%\fP',
+if any, is also copied verbatim into the output, at the end.
+
+.PP
+
+Specifications consist of declarations, a
+`\f(CW%%\fP'
+separator, and rules.
+
+Input is line-oriented; each declaration and rule must appear on a separate line,
+and declarations must begin in column 1.
+
+Declarations declare terminals \(em the operators in subject
+trees \(em and associate a unique, positive external symbol
+number with each one.
+
+Nonterminals are declared by their presence
+on the left side of rules.  The
+\f(CW%start\fP
+declaration optionally declares a nonterminal as the start symbol.
+
+In the grammar above,
+\f(CWterm\fP
+and
+\f(CWnonterm\fP
+denote identifiers that are terminals and nonterminals.
+
+.PP
+
+Rules define tree patterns in a fully parenthesized prefix
+form. Every nonterminal denotes a tree.
+
+Each operator has a fixed
+arity, which is inferred from the rules in which it is used.
+
+A chain rule is a rule whose pattern is another nonterminal.
+
+If no start symbol is declared, the nonterminal defined by the first rule is used.
+
+.PP
+
+Each rule ends with a cost that computes the cost of matching
+that rule; omitted costs
+default to zero. Costs of chain rules must be non-negative constants or function names.
+
+If the cost is defined as function, the function is called with a node
+( see \f(CWNODEPTR_TYPE\fP below ) and the function should return a non-negative integer cost.
+
+.PP
+
+The configuration section configures the output
+for the trees being parsed and the client's environment.
+
+As shown, this section must define
+\f(CWNODEPTR_TYPE\fP
+to be a visible typedef symbol for a pointer to a
+node in the subject tree.
+
+The labeller invokes
+
+\f(CWOP_LABEL(p)\fP,
+
+\f(CWLEFT\_CHILD(p)\fP, and
+
+\f(CWRIGHT\_CHILD(p)\fP
+
+to read the operator and children from the node pointed to by \f(CWp\fP.
+
+If the configuration section defines these operations as macros, they are implemented in-line;
+otherwise, they must be implemented as functions.
+
+.PP
+
+The matcher
+computes and stores a single integral state in each node of the subject tree.
+The configuration section must define a macro
+
+\f(CWSTATE_LABEL(p)\fP
+
+to access the state field of the node pointed to
+by \f(CWp\fP. It must be large enough to hold a pointer, and
+a macro is required because it is used as an lvalue.
+
+.PP
+
+The selector, \f(CW int yyselect(NODEPTR_TYPE tree)\fP, consists of a labeling pass, using the \f(CWyylabel\fP rotine, and an emiting pass, using the \f(CWyyreduce\fP rotine.
+When a successful labeling is obtained the selected code is emmited and the \f(CWyyselect\fP rotine returns 0.
+Otherwise, if no complete labeling can be achieved, the \f(CWyyselect\fP rotine returns 1, and does not invoque the \f(CWyyreduce\fP rotine.
+
+.PP
+
+When an internal error occurs, the `\f(CWPANIC\fP' rotine is called.
+A default version, called `\f(CWyypanic\fP', is supplied.
+The macro `\f(CWPANIC\fP' can be defined in the declaration section as the
+name of a user supplied panic rotine. The supplied rotine should have the same
+signature: \f(CW(YYCONST char *rot, YYCONST char *msg, int val)\fP.
+
+.PP
+
+.SH OPTIONS
+
+.TP
+
+.BI \-p \ prefix
+
+.br
+
+.ns
+
+.TP
+
+.BI \-p prefix
+
+Use
+
+.I prefix
+
+as the disambiquating prefix for visible names and fields.
+
+The default is `\f(CWyy\fP'.
+
+.TP
+
+.B \-T
+
+Arrange for a debug rotine to be called at each successful match.
+A cost of 32767, or graeter, represents the infinite cost of no previous match.
+
+The macro  `\f(CWTRACE\fP' can be defined in the declaration section as the
+name of a user supplied trace rotine. The supplied rotine should have the same
+signature: \f(CW(NODEPTR_TYPE p, int eruleno, int cost, int bestcost)\fP.
+
+
+.TP
+
+.B \-m
+
+Generate a maximal-munch selector.
+These generators are faster than the default generators since the tree is
+transversed only once.
+However, the generator does not accept rules that differ only in the
+non-terminals of the selection pattern.
+At each step, starting at the root node, the algorithm selects the matching
+rule that has the highest number of tree nodes, i.e. the highest number of
+terminals in the selection pattern.
+Rules can be excluded if they return a value graeter or equal to \f(CWMAX_COST\fP or 32767.
+An extended maximal-munch selector is generated if the \f(CW-m\fP is used twice, \f(CW-m -m\fP, allowing more complex grammars, but with possibly higher matching time..
+
+.TP
+
+.B \-A
+
+Parse all \f(CW#define\fP declarations in a \f(CW%include\fP file.
+Otherwise, the parsing of the \f(CW%include\fP file ends at the first non \f(CW#define\fP instruction.
+
+.TP
+
+.B \-n
+
+The outputed parser does not include the original line numbers of the user C
+code in the input file. It can be used for a more extensive debugging of the
+generated parser's behaviour.
+
+.TP
+
+.B \-J
+
+Generate a \f(CWJava\fP selector.
+By default, the generated public class is named \f(CWSelector\fP and the file \f(CWSelector.java\fP.
+The syntactic tree is of a \f(CWTree\fP class and must provide an empty constructor that sets 
+a negative \f(CWlabel\fP and a \f(CWvoid state(Object st)\fP method to set the given object,
+as well as the query methods \f(CWObject state()\fP, \f(CWpublic int label()\fP,
+\f(CWpublic Tree left()\fP and \f(CWpublic Tree right()\fP that return the \f(CWlabel\fP,
+the \f(CWstate\fP and the left and right tree branches, respectively.
+The command line options \f(CW-Jclass=\fP, \f(CW-Jfinal\fP, \f(CW-Jextends=\fP, \f(CW-Jthrows=\fP
+and \f(CW-Jtree=\fP allow the overriding of the generated class name, whether it is a final class,
+if it extends from an existing class, any exceptions that the embeded code
+(from the source file .brg) might throw, or the name of the class used as a syntactic tree, respectively.
+
+.TP
+
+.B \-v
+
+Print version and exit.
+
+.PP
+
+.SH ERRORS
+
+.TP
+
+.B Null tree
+when a NULL node is accessed. The tree has a NULL branch. When the declared arity of the tree pattern is higher than actual number of branches in the tree, the missing branches can be interpreted as NULL nodes.
+
+.TP
+
+.B Null kids in
+when there are NULL nodes in the computed kids of a pattern. The kids of a pattern are a sequential list of all terminals and nonterminals of a pattern, in the that they appear in the pattern (left to right).
+
+.TP
+
+.B Bad terminal
+when the label of a node does not match any of labels in the patterns. Some tree branch was tagged with an undefined label.
+
+.TP
+
+.B Bad goal nonterminal
+when an invalod nonterminal is used as a goal nonterminal.
+
+.TP
+
+.B Bad rule number
+when the internaly assigned rule number is invalid.
+
+.PP
+
+.SH "SEE ALSO"
+
+.IR lcc (1)
+
+.PP
+
+C. W. Fraser and D. R. Hanson,
+.IR A Retargetable C Compiler: Design and Implementation ,
+Benjamin/Cummings, Redwood City, CA, 1995,
+ISBN 0-8053-1670-1. Chapter 14.
+
+.PP
+
+C. W. Fraser, D. R. Hanson and T. A. Proebsting,
+`Engineering a simple, efficient code generator generator,'
+.I
+ACM Letters on Programming Languages and Systems
+.BR 1 ,
+3 (Sep. 1992), 213-226.
+
+.br
+
+.SH BUGS
+
+Mail bug reports along with the shortest input
+that exposes them to reis.santos@tecnico.ulisboa.pt.
+

@@ -1,0 +1,154 @@
+%{
+#include <stdio.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+
+static const char *name[] = { "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "no-reg" };
+static int busy[sizeof(name)];
+static int getReg();
+
+enum {INT=1, VAR=2, ADD=3, ASSIGN=4 };
+
+#define STATE_TYPE void*
+typedef struct tree {
+	char op;
+	int place;
+	struct tree *kids[2];
+	STATE_TYPE state_label;
+} *NODEPTR_TYPE;
+#define OP_LABEL(p) ((p)->op)
+#define LEFT_CHILD(p) ((p)->kids[0])
+#define RIGHT_CHILD(p) ((p)->kids[1])
+#define STATE_LABEL(p) ((p)->state_label)
+
+static int sameVar(NODEPTR_TYPE p) {
+  return strcmp((char*)LEFT_CHILD(LEFT_CHILD(p)),
+		(char*)LEFT_CHILD(LEFT_CHILD(RIGHT_CHILD(p)))) ? 0x7fff : 5;
+}
+
+%}
+%term INT=1 VAR=2 ADD=3 ASSIGN=4
+%%
+stat: reg			0 { busy[LEFT_CHILD(p)->place] = 0; }
+reg:  INT			2 {
+		printf(" mov %s, %ld\n", name[p->place = getReg()], (long)LEFT_CHILD(p)); }
+reg:  VAR			3 {
+		printf(" mov %s, [%s]\n", name[p->place = getReg()], (char*)LEFT_CHILD(p)); }
+varint: INT
+varint: VAR
+reg:  ADD(reg,reg)		2 {
+	   	printf(" add %s, %s\n", name[p->place=LEFT_CHILD(p)->place],
+					name[RIGHT_CHILD(p)->place]);
+		busy[RIGHT_CHILD(p)->place]=0; }
+reg:  ADD(reg,varint)		3 {
+		  if (RIGHT_CHILD(p)->op == INT)
+		    printf(" add %s, %ld\n",
+			   name[p->place=LEFT_CHILD(p)->place],
+			   (long)LEFT_CHILD(RIGHT_CHILD(p)));
+		  else
+		    printf(" add %s, [%s]\n",
+			   name[p->place=LEFT_CHILD(p)->place],
+			   (char*)LEFT_CHILD(RIGHT_CHILD(p)));
+		}
+reg:  ADD(varint,reg)		3 {
+		  if (LEFT_CHILD(p)->op == INT)
+		    printf(" add %s, %ld\n",
+		    	   name[p->place=RIGHT_CHILD(p)->place],
+			   (long)LEFT_CHILD(LEFT_CHILD(p)));
+		  else
+		    printf(" add %s, [%s]\n",
+		    	   name[p->place=RIGHT_CHILD(p)->place],
+			   (char*)LEFT_CHILD(LEFT_CHILD(p)));
+		}
+stat:  ASSIGN(VAR,reg)		3 {
+	   	printf(" mov [%s], %s\n", (char*)LEFT_CHILD(LEFT_CHILD(p)),
+					name[RIGHT_CHILD(p)->place]);
+		busy[RIGHT_CHILD(p)->place]=0; }
+stat:  ASSIGN(VAR,INT)		3 {
+	   	printf(" mov [%s], %ld\n", (char*)LEFT_CHILD(LEFT_CHILD(p)),
+					  (long)LEFT_CHILD(RIGHT_CHILD(p)));
+		}
+stat:  ASSIGN(VAR,ADD(VAR,INT))	sameVar {
+		  printf(" add [%s], %ld\n", (char*)LEFT_CHILD(LEFT_CHILD(p)),
+			  (long)LEFT_CHILD(RIGHT_CHILD(RIGHT_CHILD(p))));
+		}
+stat:  ASSIGN(VAR,ADD(VAR,reg))	sameVar {
+		  printf(" add [%s], %s\n", (char*)LEFT_CHILD(LEFT_CHILD(p)),
+			 name[RIGHT_CHILD(RIGHT_CHILD(p))->place]);
+		  busy[RIGHT_CHILD(RIGHT_CHILD(p))->place]=0;
+		}
+%%
+static int getReg()
+{
+  unsigned int i;
+
+  for(i = 0; i < sizeof(busy); i++)
+    if (busy[i] == 0) {
+      busy[i] = 1;
+      return i;
+    }
+  fprintf(stderr,"Registos esgotados\n");
+  return sizeof(busy) + 1;
+}
+
+static NODEPTR_TYPE tree(int op, NODEPTR_TYPE l, NODEPTR_TYPE r) {
+	NODEPTR_TYPE p = (NODEPTR_TYPE)malloc(sizeof *p);
+
+	assert(p);
+	OP_LABEL(p) = op;
+	LEFT_CHILD(p) = l;
+	RIGHT_CHILD(p) = r;
+	STATE_LABEL(p) = 0;
+	return p;
+}
+#define treeInt(val) tree(INT,(NODEPTR_TYPE)val,0)
+#define treeVar(name) tree(VAR,(NODEPTR_TYPE)name,0)
+
+int main(void) {
+	NODEPTR_TYPE p;
+
+printf("*** x = 2\n");
+	p = tree(ASSIGN, treeVar("x"), treeInt(2));
+	yyselect(p);
+ 
+printf("\n\n*** x = y\n");
+	p = tree(ASSIGN, treeVar("x"), treeVar("y"));
+	yyselect(p);
+ 
+printf("\n\n*** x = x + 1\n");
+	p = tree(ASSIGN, treeVar("x"), tree(ADD, treeVar("x"), treeInt(1)));
+	yyselect(p);
+ 
+printf("\n\n*** x = x + y\n");
+	p = tree(ASSIGN, treeVar("x"), tree(ADD, treeVar("x"), treeVar("y")));
+	yyselect(p);
+ 
+printf("\n\n*** x = y + 3\n");
+	p = tree(ASSIGN, treeVar("x"), tree(ADD, treeVar("y"), treeInt(3)));
+	yyselect(p);
+ 
+printf("\n\n*** ((3 + z) + 12) + (x + (y + 5)) + i\n");
+	p = tree(ADD,
+		 tree(ADD,
+		      tree(ADD,
+			   tree(ADD,
+			        treeInt(3),
+			        treeVar("z")
+			       ),
+			       treeInt(12)
+			  ),
+                      tree(ADD,
+			   treeVar("x"),
+			   tree(ADD,
+			        treeVar("y"),
+			        treeInt(5)
+			       )
+			  )
+                     ),
+		 treeVar("i")
+                );
+	yyselect(p);
+
+	return 0;
+}
