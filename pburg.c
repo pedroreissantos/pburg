@@ -21,7 +21,7 @@ int Aflag = 0, Tflag = 0, nflag = 0;
 #define YYTREE "Tree"
 int Jflag = 0;
 static int pflag = 0; /* prefix has changed */
-char *treeClass = YYTREE, *outClass = YYCLASS;
+char *treeClass = YYTREE;
 static char *extends = "", *throws = "", *final = "";
 static void emitjava(void);
 #endif
@@ -1423,7 +1423,7 @@ static void emitjava(void) {
 		/* print("%1default:\n"
 	"%2panic(\"label\", \"Bad terminal\", a.label());\n%1}\n}\n\n"); */
 	      print("%1default:\n"
-"%2PANIC(\"%Plabel\", \"Bad terminal\", a.label(a));\n%1}\n");
+"%2panic(\"%Plabel\", \"Bad terminal\", a.label());\n%1}\n");
 	      if (Tflag == 2) print("%1for (c = 1; c < %d; c++)\n%2if (p.cost[c] < 0x7fff) return;\n%1System.err.println(\"warning: can not match 0x\"+Integer.toHexString(System.identityHashCode(a)));\n", ntnumber); /* 2.5 */
 	      print("}\n\n");
 	}

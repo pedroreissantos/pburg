@@ -1,10 +1,13 @@
 .SUFFIXES: .java .class .brg
 
-SAMPLES=sample4j.class sample5j.class sample6j.class
+SAMPLES=Sample4j.class Sample5j.class Sample6j.class
 
 BURG=../pburg.exe
 
 all: $(BURG) $(SAMPLES)
+
+run: all
+	for i in $(SAMPLES); do echo "*** $$i ***"; java `basename $$i .class`; done
 
 .java.class:
 	javac $<
@@ -16,4 +19,4 @@ $(BURG):
 	cd ..; make $(MFLAGS)
 
 clean:
-	rm $(SAMPLES)
+	rm -f $(SAMPLES) *.class *~
