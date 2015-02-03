@@ -1,0 +1,140 @@
+%{
+import java.io.*;
+import java.util.*;
+//package sample;
+%}
+%term INT=1 VAR=2 ADD=3 ASSIGN=4
+%%
+stat: reg			0 { busy[p.place()] = 0; }
+reg:  INT			2 {
+		// System.err.println("reg: INT with "+p);
+		System.out.println(" mov "+name[p.place(getReg())]+", "+p.value()); }
+reg:  VAR			3 {
+		// System.err.println("reg: VAR with "+p);
+		System.out.println(" mov "+name[p.place(getReg())]+", ["+p.text()+"]"); }
+varint: INT {}
+varint: VAR {}
+reg:  ADD(reg,reg)		2 {
+		// System.err.println("reg: ADD(reg,reg) with "+p);
+	   	System.out.println(" add "+name[p.place(p.left().place())]+", "+ name[p.right().place()]);
+		busy[p.right().place()]=0; }
+reg:  ADD(reg,varint)		3 {
+		// System.err.println("reg: ADD(reg,varint) with "+p);
+		  if (p.right().label() == INT)
+		    System.out.println(" add "+name[p.place(p.left().place())]+", "+
+			   p.right().value());
+		  else
+		    System.out.println(" add "+name[p.place(p.left().place())]+
+		    	   ", ["+p.right().text()+"]");
+		}
+reg:  ADD(varint,reg)		3 {
+		// System.err.println("reg: ADD(varint,reg) with "+p);
+		  if (p.left().label() == INT)
+		    System.out.println(" add "+name[p.place(p.right().place())]+", "+
+			   p.left().value());
+		  else
+		    System.out.println(" add "+name[p.place(p.right().place())]+", ["+
+		    	   p.left().text()+"]");
+		}
+stat:  ASSIGN(VAR,reg)		3 {
+		// System.err.println("stat: ASSIGN(VAR,reg) with "+p);
+	   	System.out.println(" mov ["+p.left().text()+"], "+
+					name[p.right().place()]);
+		busy[p.right().place()]=0; }
+stat:  ASSIGN(VAR,INT)		3 {
+		// System.err.println("stat: ASSIGN(VAR,INT) with "+p);
+	   	System.out.println(" mov ["+p.left().text()+"], "+
+					  p.right().value());
+		}
+stat:  ASSIGN(VAR,ADD(VAR,INT))	sameVar {
+		// System.err.println("stat: ASSIGN(VAR,ADD(VAR,INT)) with "+p);
+		  System.out.println(" add ["+p.left().text()+"], "+
+			  p.right().right().value());
+		}
+stat:  ASSIGN(VAR,ADD(VAR,reg))	sameVar {
+		// System.err.println("stat: ASSIGN(VAR,ADD(VAR,reg)) with "+p);
+		  System.out.println(" add ["+p.left().text()+"], "+
+			 name[p.right().place()]);
+		  busy[p.right().right().place()]=0;
+		}
+%%
+private static final String name[] = { "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "no-reg" };
+private int busy[] = new int[name.length];
+
+public final static short INT=1;
+public final static short VAR=2;
+public final static short ADD=3;
+public final static short ASSIGN=4;
+
+static int sameVar(Tree p) {
+  // System.err.println("samevar: "+p+" strcmp("+p.left().text()+", "+p.right().left().text()+") = "+p.left().text().compareTo(p.right().left().text()));
+  return p.left().text().compareTo(
+  		p.right().left().text()) != 0 ? 0x7fff : 5;
+}
+
+private int getReg()
+{
+  int i;
+
+  for(i = 0; i < busy.length; i++)
+    if (busy[i] == 0) {
+      busy[i] = 1;
+      return i;
+    }
+  System.err.println("Registos esgotados");
+  return busy.length + 1;
+}
+
+public static void main(String args[]) {
+	Tree p;
+	// Selector s = new Selector(); // without -j
+	Sample6j s = new Sample6j(); // with -j Sample6j
+
+System.out.println("*** x = 2");
+	p = new Tree(ASSIGN, new Tree(VAR, "x"), new Tree(INT, 2));
+	// System.out.println(p);
+	s.select(p);
+ 
+System.out.println("\n\n*** x = y");
+	p = new Tree(ASSIGN, new Tree(VAR, "x"), new Tree(VAR, "y"));
+	// System.out.println(p);
+	s.select(p);
+ 
+System.out.println("\n\n*** x = x + 1");
+	p = new Tree(ASSIGN, new Tree(VAR, "x"), new Tree(ADD, new Tree(VAR, "x"), new Tree(INT, 1)));
+	// System.out.println(p);
+	s.select(p);
+ 
+System.out.println("\n\n*** x = x + y");
+	p = new Tree(ASSIGN, new Tree(VAR, "x"), new Tree(ADD, new Tree(VAR, "x"), new Tree(VAR, "y")));
+	// System.out.println(p);
+	s.select(p);
+ 
+System.out.println("\n\n*** x = y + 3");
+	p = new Tree(ASSIGN, new Tree(VAR, "x"), new Tree(ADD, new Tree(VAR, "y"), new Tree(INT, 3)));
+	// System.out.println(p);
+	s.select(p);
+ 
+System.out.println("\n\n*** ((3 + z) + 12) + (x + (y + 5)) + i");
+	p = new Tree(ADD,
+		 new Tree(ADD,
+		      new Tree(ADD,
+			   new Tree(ADD,
+			        new Tree(INT, 3),
+			        new Tree(VAR, "z")
+			       ),
+			       new Tree(INT, 12)
+			  ),
+                      new Tree(ADD,
+			   new Tree(VAR, "x"),
+			   new Tree(ADD,
+			        new Tree(VAR, "y"),
+			        new Tree(INT, 5)
+			       )
+			  )
+                     ),
+		 new Tree(VAR, "i")
+                );
+	// System.out.println(p);
+	s.select(p);
+}
