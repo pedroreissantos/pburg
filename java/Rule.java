@@ -26,7 +26,7 @@ class Rule {
         break;
     if (i == _code.length())
       _cost = Integer.parseInt(_code);
-    else _cost = -1;
+    else { _cost = -1; _code = "(" + _code + "(a))"; }
   }
 
   public Nonterm lhs() { return _lhs; }

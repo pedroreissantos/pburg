@@ -3,8 +3,9 @@ SCAN=scan
 GRAM=gram
 MAIN=pburg
 TREE=Tree
+OTHER=Name.class Nonterm.class Pattern.class Rule.class Term.class
 
-CLASS=$(MAIN).class $(SCAN).class $(GRAM).class $(TREE).class
+CLASS=$(MAIN).class $(SCAN).class $(GRAM).class $(OTHER) $(TREE).class
 SAMPLES=Sample4j.class Sample5j.class Sample6j.class
 
 #BURG=../pburg.exe -J # C version
@@ -22,7 +23,7 @@ $(GRAM).class: $(SCAN).java
 	javac $<
 
 .brg.java:
-	$(BURG) -p $* $< $@
+	$(BURG) -Jclass=$* $< $@
 
 #$(BURG): ; cd ..; make $(MFLAGS)
 

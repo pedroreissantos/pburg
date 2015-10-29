@@ -51,8 +51,12 @@ public class pburg {
     }
 
     public static void arguments(String[] args) throws Exception {
-        for (String s: args)
-	    if (s.equals("-T")) Tflag++;
+        // for (String s: args)
+	String s;
+	for (int i = 0; i < args.length; i++)
+	    if ((s = args[i]).equals("-T")) Tflag++;
+	    else if (s.equals("-p") && i+1 < args.length)
+	    	    prefix = args[++i];
 	    else if (s.length() > 8 && s.substring(0,8).equals("-Jclass="))
 		    prefix = s.substring(8);
 	    else if (s.equals("-Jfinal"))
