@@ -1,3 +1,5 @@
+package pt.tecnico.pburg;
+
 class Pattern {
   private Name _op;		/* a terminal or nonterminal */
   private Pattern _left, _right;	/* operands */

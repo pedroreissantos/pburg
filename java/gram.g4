@@ -1,5 +1,9 @@
 parser grammar gram;
 
+@header {
+	package pt.tecnico.pburg;
+}
+
 options { tokenVocab=scan; } // use tokens from scan.g4
 
 pburg	: pdecl* SEP prule* pcode?

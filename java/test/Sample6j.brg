@@ -1,7 +1,8 @@
 %{
+package test;
 import java.io.*;
 import java.util.*;
-//package sample;
+import pt.tecnico.pburg.Tree;
 %}
 %term INT=1 VAR=2 ADD=3 ASSIGN=4
 %%

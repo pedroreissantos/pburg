@@ -1,0 +1,11 @@
+Manifest-Version: 1.0
+Created-By: Pedro Reis dos Santos
+Implementation-Vendor: Instituto Superior Técnico
+Implementation-Title: pburg
+Implementation-Version: 20170130174501
+Specified-By: Pedro Reis dos Santos
+Specification-Vendor: Instituto Superior Técnico
+Specification-Title: Code Generator Generator
+Specification-Version: 2014
+Class-Path: antlr-4.6-complete.jar
+Main-Class: pt.tecnico.pburg.Main

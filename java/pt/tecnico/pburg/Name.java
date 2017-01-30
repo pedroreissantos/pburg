@@ -1,3 +1,5 @@
+package pt.tecnico.pburg;
+
 public abstract class Name {
   private String _name;		/* nonterminal name */
 

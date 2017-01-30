@@ -1,3 +1,5 @@
+package pt.tecnico.pburg;
+
 import java.util.*;
 class Nonterm extends Name {
   private int _number;		/* identifying number */

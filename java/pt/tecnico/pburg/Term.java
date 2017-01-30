@@ -1,3 +1,5 @@
+package pt.tecnico.pburg;
+
 import java.util.*;
 class Term extends Name {
   private int _esn;		/* external symbol number */

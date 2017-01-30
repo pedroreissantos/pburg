@@ -1,3 +1,5 @@
+package pt.tecnico.pburg;
+
 import java.util.*;
 class Rule {
   private Nonterm _lhs;		/* lefthand side nonterminal */

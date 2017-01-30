@@ -1,5 +1,9 @@
 lexer grammar scan;
 
+@header {
+	package pt.tecnico.pburg;
+}
+
 DECL:		'%{' .*? '%}' ;
 COM:	( '%!' (~[\n\r])* ) -> skip;
 CCOM:		'/*' .*? '*/' -> skip ;

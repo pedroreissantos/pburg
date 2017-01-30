@@ -1,12 +1,13 @@
+package pt.tecnico.pburg;
+
 import java.io.*;
 import java.util.*;
-import java.time.*;
 import org.antlr.v4.runtime.*;
 
-public class pburg {
+public class Main {
     private static final String VERSION = "2.5";
     private static final String RCSID =
-	"$Id: pburg.java,v "+VERSION+" 2015/10/25 17:04:42 prs Exp $";
+	"$Id: Main.java,v "+VERSION+" 2017/01/30 15:49:42 prs Exp $";
     private static String prefix = "Selector", treeClass = "Tree";
     private static String infile = "<stdin>", outfile;
     private static boolean Aflag, nflag, pflag;
@@ -24,7 +25,7 @@ public class pburg {
 
     public static void main(String[] args) throws Exception {
 	arguments(args);
-	out.println("/*\ngenerated at "+LocalDate.now()+" "+LocalTime.now()
+	out.println("/*\ngenerated at "+new Date()+" "+new Date()
 		    +"\nby "+RCSID+"\n*/");
 	parse(in);
 	System.err.println("*** PARSING ENDED ***");
@@ -119,16 +120,16 @@ public class pburg {
                 if (ctx.INT() != null) cost = ctx.INT().getText();
                 if (ctx.pact() != null) act = ctx.pact().ACTION().getText();
                 // System.out.println("nonterm( "+ctx.ID(0) +");");
-                pburg.nonterm(ctx.ID(0).getText());
-                pburg.rule(ctx.ID(0).getText(), tree(ctx.ptree()), act, cost, ctx.ID(0).getSymbol().getLine());
+                nonterm(ctx.ID(0).getText());
+                rule(ctx.ID(0).getText(), tree(ctx.ptree()), act, cost, ctx.ID(0).getSymbol().getLine());
             }
 
 	    private Pattern tree(gram.PtreeContext ctx) {
 		if (ctx.ptree(0) == null)
-		    return pburg.tree(ctx.ID().getText(), null, null);
+		    return Main.tree(ctx.ID().getText(), null, null);
 		if (ctx.ptree(1) == null)
-		    return pburg.tree(ctx.ID().getText(), tree(ctx.ptree(0)), null);
-		return pburg.tree(ctx.ID().getText(), tree(ctx.ptree(0)), tree(ctx.ptree(1)));
+		    return Main.tree(ctx.ID().getText(), tree(ctx.ptree(0)), null);
+		return Main.tree(ctx.ID().getText(), tree(ctx.ptree(0)), tree(ctx.ptree(1)));
 	    }
 
             @Override
@@ -140,7 +141,7 @@ public class pburg {
 		else
 		    i = Integer.parseInt(ctx.INTEG().getText());
 		// System.out.println("term(" + ctx.IDENT().getText()+", "+ i);
-		pburg.term(ctx.IDENT().getText(), i);
+		term(ctx.IDENT().getText(), i);
             }
 
 	    private void include(String file) {
@@ -155,7 +156,7 @@ public class pburg {
 			for (i = line.length()-1; i >= 0; i--)
 			    if (line.charAt(i) == '=')
 				break;
-			pburg.term(line.substring(0, i), Integer.parseInt(line.substring(i+1)));
+			term(line.substring(0, i), Integer.parseInt(line.substring(i+1)));
 		    }
 		} catch (FileNotFoundException e) {
 		    System.out.println("Erro (file not found):"+file+": line "+lineno+": "+e);
@@ -169,20 +170,20 @@ public class pburg {
 // pdecl	: TOKEN plist* | START IDENT | INCLUDE STR | DECL ;
                 // ctx.TERM() is processed in plist.
 		if (ctx.START() != null)
-		  pburg.startname = ctx.IDENT().getText();
+		  startname = ctx.IDENT().getText();
 		if (ctx.INCLUDE() != null)
 		  include(ctx.STR().getText());
 		if (ctx.DECL() != null) {
 		  int len = ctx.DECL().getText().length();
 		  // System.out.println("\tDECL: "+ctx.DECL().getText().substring(2, len-4));
-		  pburg.decl += ctx.DECL().getText().substring(2, len-4);
+		  decl += ctx.DECL().getText().substring(2, len-3);
 		}
             }
 
             @Override
             public void exitPcode(gram.PcodeContext ctx) {
 // pcode	: SEP2 END* ;
-                pburg.code = ctx.getText().substring(2);
+                code = ctx.getText().substring(2);
             }
 
         });
@@ -384,7 +385,7 @@ public class pburg {
 	if ((j = outfile.lastIndexOf('/')) == 0) j = -1;
 	if ((i = outfile.lastIndexOf('.')) == 0) i = outfile.length();
 	if (j < i && cl.equals(outfile.substring(j+1,i))) pub = "public ";
-	out.print(
+	out.print(decl +
 	      "\n" + pub + " " + _final + " class "+ cl +" "+ _extends +" {\n\n"
 	    + "public static final String PBURG_PREFIX=\""+ prefix +"\";\n"
 	    + "public static final String PBURG_VERSION=\""+ VERSION +"\";\n"

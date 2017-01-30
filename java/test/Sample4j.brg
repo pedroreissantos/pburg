@@ -1,3 +1,7 @@
+%{
+package test;
+import pt.tecnico.pburg.Tree;
+%}
 %term ASSIGN=100 CONST=101 VAR=102 PLUS=103 MINUS=104 UMINUS=105
 %%
 stat:  ASSIGN(VAR,reg)   19 {
