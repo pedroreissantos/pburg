@@ -27,7 +27,7 @@ typedef struct tree {
 %%
 stat:  ASSIGN(VAR,reg)   19 {
 	   	printf(" mov var, %s\n", name[RIGHT_CHILD(p)->place]);
-		busy[RIGHT_CHILD(p)->place]=0; /* liberta registo filho 1 */ }
+		busy[RIGHT_CHILD(p)->place]=0; /* free register child 1 */ }
 stat:  ASSIGN(VAR,CONST) 20 { printf(" mov var, const\n"); }
 
 reg:   mem               18 {
@@ -57,15 +57,15 @@ reg:   UMINUS(reg)       3 {
 
 mem:   reg               19 {
 	   	printf(" mov mem, %s\n", name[LEFT_CHILD(p)->place]);
-		busy[LEFT_CHILD(p)->place]=0; /* liberta registo filho 1 */ }
+		busy[LEFT_CHILD(p)->place]=0; /* free register child 1 */ }
 mem:   CONST             20 { printf(" mov mem, const\n"); }
 mem:   PLUS(mem,reg)     30 {
 	   	printf(" add mem, %s\n", name[RIGHT_CHILD(p)->place]);
-		busy[RIGHT_CHILD(p)->place]=0; /* liberta registo filho 1 */ }
+		busy[RIGHT_CHILD(p)->place]=0; /* free register child 1 */ }
 mem:   PLUS(mem,CONST)   31 { printf(" add mem, const\n"); }
 mem:   MINUS(mem,reg)    30 {
 	   	printf(" sub mem, %s\n", name[RIGHT_CHILD(p)->place]);
-		busy[RIGHT_CHILD(p)->place]=0; /* liberta registo filho 1 */ }
+		busy[RIGHT_CHILD(p)->place]=0; /* free register child 1 */ }
 mem:   MINUS(mem,CONST)  31 { printf(" sub mem, const\n"); }
 mem:   UMINUS(mem)       30 { printf(" neg mem\n"); }
 %%
@@ -79,7 +79,7 @@ static int getReg()
       busy[i] = 1;
       return i;
     }
-  fprintf(stderr,"Registos esgotados\n");
+  fprintf(stderr,"out of registers\n");
   return sizeof(busy) + 1;
 }
 

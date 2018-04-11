@@ -88,7 +88,7 @@ static int getReg()
       busy[i] = 1;
       return i;
     }
-  fprintf(stderr,"Registos esgotados\n");
+  fprintf(stderr,"out of registers\n");
   return sizeof(busy) + 1;
 }
 

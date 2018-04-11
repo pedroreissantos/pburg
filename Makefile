@@ -32,7 +32,7 @@ test:		$(BURG)$E sample4.o sample5.o sample6.o
 	groff -man -Tps $< > $@
 
 clean::
-		rm -f *$O *~ scan.c gram.c y.tab.h core sample*.c a.out sample4$E sample5$E sample6$E
+		rm -f *$O *~ scan.c gram.c y.tab.h core sample*.c a.out sample4$E sample5$E sample6$E yyselect.c
 
 clobber::	clean
 		rm -f y.tab.c gram.tab.c $(BURG)$E

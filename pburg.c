@@ -11,7 +11,7 @@
 #define VER(maj,min) #maj"."#min	/* stringify */
 
 #define VERSION "2.5"
-static char rcsid[] = "$Id: pburg.c,v " VERSION " 2014/06/24 17:04:42 prs Exp $";
+static char rcsid[] = "$Id: pburg.c,v " VERSION " 2017/11/16 09:41:42 prs Exp $";
 static char *prefix = "yy";
 char *outfile = "select.c";
 char *infile = "<stdin>";
@@ -664,8 +664,8 @@ static void emitcontext(void) {
 	print("#define MAX_COST 0x7fff\n");
 	print("#if defined(__STDC__) || defined(__cplusplus)\n"
 		"#define YYCONST const\n#else\n#define YYCONST\n#endif\n");
-	if (nflag == 0) print("\n#line 1 \"%s\"\n", infile);
 	if (Tflag == 0) print("\n#define NOTRACE 1\n");
+	if (nflag == 0) print("\n#line 1 \"%s\"\n", infile);
 }
 
 /* emitheader - emit initial definitions */

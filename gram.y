@@ -6,7 +6,7 @@
 static char rcsid[] = "$Id: gram.y,v 2.5 1997/11/21 18:59:34 drh Exp $";
 /*lint -e616 -e527 -e652 -esym(552,yynerrs) -esym(563,yynewstate,yyerrlab) */
 #define YYDEBUG 1
-extern int yylineno, blkline;
+extern int yylineno, blkline, yylex();
 extern char *infile;
 %}
 %union {
