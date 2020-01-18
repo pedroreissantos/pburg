@@ -979,6 +979,7 @@ static void emitreduce(Rule rules) {
 		char *tmpl = r->template;
 		if (tmpl == 0) tmpl = "";
 		print("%1case %d: /* %R */\n", r->ern, r);
+		if (Tflag) print("%2fprintf(stderr, \"0x%%lx: line %d: %R\\n\",(long)p);\n", r->lineno, r);
 		if (nflag == 0) print("#line %d \"%s\"\n", r->lineno, infile);
 		print("%s\n%2break;\n", tmpl);
 	}

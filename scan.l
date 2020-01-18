@@ -1,6 +1,7 @@
 %{
 #include "pburg.h"
 #include "y.tab.h"
+#include <string.h>
 static char rcsid[] = "$Id: scan.l,v 1.2 2010/10/25 11:32:18 prs Exp $";
 char *blkadd(int), *strdup(const char*);
 static int blkcnt;
@@ -15,6 +16,7 @@ int blkline;
 <CODE>.|\n	fputs(yytext, outfp);
 <CODE>^"%}"	BEGIN(INITIAL);
 [ \f\t]+	;
+\\\n		;
 [\n(),;=]	return yytext[0];
 [:]		blkline = yylineno; return yytext[0];
 <RULE>^"%%"	BEGIN(END); blkline = yylineno; return 0;
@@ -30,13 +32,12 @@ int blkline;
 <BLK>\'([^'\\]|\\..?.?)\'	blkadd(1);
 <BLK>\}		blkadd(1); if (--blkcnt <= 0) { BEGIN(RULE); return BLOCK; }
 <BLK>\{		blkadd(1); blkcnt++;
-<BLK>[^"'{}]+	blkadd(1); /* was: .|\n */
 <BLK>"//".*	blkadd(1);
 <BLK>"/*"	blkadd(1); BEGIN(BLKC);
+<BLK>[^"'{}]	blkadd(1); /* was: .|\n */
 <BLKC>"*/"	blkadd(1); BEGIN(BLK);
-<BLKC>[^/*]+	blkadd(1); /* was: .|\n */
-<BLKC>[/*]	blkadd(1);
-<END>(.|\n)*	fputs(yytext, outfp);
+<BLKC>.|\n	blkadd(1);
+<END>.*\n	fputs(yytext, outfp);
 .|\n		yyerror("unrecognised character: %s\n", yytext);
 %%
 int yywrap() { return 1; }
