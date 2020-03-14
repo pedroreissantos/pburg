@@ -13,6 +13,8 @@ YFLAGS=-d
 LFLAGS=-l
 LEX=flex
 OBJS=$(BURG)$O gram$O scan$O
+DIR=/usr/local/bin
+
 .brg.c:
 	./$(BURG)$E $(PFLAGS) $< $@
 
@@ -24,6 +26,9 @@ test:		$(BURG)$E sample4.o sample5.o sample6.o
 		$(CC) -o sample4$E sample4.o; ./sample4$E
 		$(CC) -o sample5$E sample5.o; ./sample5$E
 		$(CC) -o sample6$E sample6.o; ./sample6$E
+
+install:: $(BURG)$E
+	sudo cp $< $(DIR)
 
 .ps.pdf:
 	ps2pdf $< $@
