@@ -743,7 +743,7 @@ static void emitlabel(Term terms, Nonterm start, int ntnumber) {
 		emitcase(p, ntnumber);
 	print("%1default:\n"
 "%2PANIC(\"%Plabel\", \"Bad terminal\", OP_LABEL(a));\n%1}\n");
-	if (Tflag == 2) print("%1for (c = 1; c < %d; c++)\n%2if (p->cost[c] < 0x7fff) return;\n%1fprintf(stderr,\"warning: can not match 0x%%x\\n\",(long)a);\n", ntnumber); /* 2.5 */
+	if (Tflag == 2) print("%1for (c = 1; c < %d; c++)\n%2if (p->cost[c] < 0x7fff) return;\n%1fprintf(stderr,\"warning: can not match 0x%%p\\n\",(void*)a);\n", ntnumber); /* 2.5 */
 	print("}\n\n");
 }
 
@@ -758,7 +758,7 @@ static void emitcode(Rule rules) {
 	print("  NODEPTR_TYPE kids[%d];\n  int i;\n\n", maxkids);
 	print("  for (%Pkids(p, eruleno, kids), i = 0; nts[i]; i++)\n");
 	print("    if (%Pmunch(kids[i], nts[i], 0) == 0) return 0;\n\n");
-        if (Tflag) print("  fprintf(stderr, \"0x%%lx: %%s\\n\", (long)p, %Pstring[eruleno]);\n");
+        if (Tflag) print("  fprintf(stderr, \"0x%%p: %%s\\n\", (void*)p, %Pstring[eruleno]);\n");
 	print("  switch(eruleno) {\n");
 	for (r = rules; r; r = r->link) {
 		char *tmpl = r->template;
@@ -782,7 +782,7 @@ static void emitmaximal(Term p, int ntnumber) {
 			if (r->cost == -1) print("%3&& %s < MAX_COST\n", r->code);
                         print("%2) {\n");
                         print("%3if (%Pmaximal(a, %d) == 1) return 1;\n", r->ern);
-                        if (Tflag) print("%3fprintf(stderr, \"0x%%lx: %R\\n\", (long)a);\n", r);
+                        if (Tflag) print("%3fprintf(stderr, \"0x%%p: %R\\n\", (void*)a);\n", r);
 			print("%2}\n");
 			break;
 		case 1:
@@ -794,7 +794,7 @@ static void emitmaximal(Term p, int ntnumber) {
 			if (r->cost == -1) print("%3&& %s < MAX_COST\n", r->code);
 			print("%2) {\n");
                         print("%3if (%Pmaximal(a, %d) == 1) return 1;\n", r->ern);
-                        if (Tflag) print("%3fprintf(stderr, \"0x%%lx: %R\\n\", (long)a);\n", r);
+                        if (Tflag) print("%3fprintf(stderr, \"0x%%p: %R\\n\", (void*)a);\n", r);
 			print("%2}\n");
 			break;
 		case 2:
@@ -808,7 +808,7 @@ static void emitmaximal(Term p, int ntnumber) {
 			if (r->cost == -1) print("%3&& %s < MAX_COST\n", r->code);
 			print("%2) {\n");
                         print("%3if (%Pmaximal(a, %d) == 1) return 1;\n", r->ern);
-                        if (Tflag) print("%3fprintf(stderr, \"0x%%lx: %R\\n\", (long)a);\n", r);
+                        if (Tflag) print("%3fprintf(stderr, \"0x%%p: %R\\n\", (void*)a);\n", r);
 			print("%2}\n");
 			break;
 		default: assert(0);
@@ -839,11 +839,11 @@ static void emitmunch(Term terms, Nonterm start, int ntnumber) {
                	for (r = nts->rules; r; r = r->link)
  			if (r->pattern->nterms == 0) {
 				print("%1if (goalnt == %d && loop <= %d) if (%Pmunch(a, %d, loop+1)) { /* %R */\n", r->lhs->number, ntnumber, ((Nonterm)r->pattern->op)->number, r);
-				if (Tflag) print("%2fprintf(stderr, \"0x%%lx: %R\\n\", (long)a);\n", r);
+				if (Tflag) print("%2fprintf(stderr, \"0x%%p: %R\\n\", (void*)a);\n", r);
 				print("%2return 1;\n%1}\n");
 			}
         }
-	if (Tflag) print("%1fprintf(stderr, \"0x%%lx: NO MATCH for %%s to %%s\\n\", (long)a, %Ptermname[OP_LABEL(a)], %Pntname[goalnt]);\n");
+	if (Tflag) print("%1fprintf(stderr, \"0x%%p: NO MATCH for %%s to %%s\\n\", (void*)a, %Ptermname[OP_LABEL(a)], %Pntname[goalnt]);\n");
 	print("%1return 0;\n}\n\n");
 }
 
@@ -960,8 +960,8 @@ static void emittrace() {
 	      " int eruleno, int cost, int bestcost)\n{\n"
 	      "%1int op = OP_LABEL(p);\n%1YYCONST char *tname = "
 	      "%Ptermname[op] ? %Ptermname[op] : \"?\";\n"
-	      "%1fprintf(stderr, \"0x%%lx:%%s matched %%s with cost "
-	      "%%d vs. %%d\\n\", (long)p, tname, "
+	      "%1fprintf(stderr, \"0x%%p:%%s matched %%s with cost "
+	      "%%d vs. %%d\\n\", (void*)p, tname, "
 	      "%Pstring[eruleno], cost, bestcost);\n}\n#endif\n\n");
 }
 
@@ -979,7 +979,7 @@ static void emitreduce(Rule rules) {
 		char *tmpl = r->template;
 		if (tmpl == 0) tmpl = "";
 		print("%1case %d: /* %R */\n", r->ern, r);
-		if (Tflag) print("%2fprintf(stderr, \"0x%%lx: line %d: %R\\n\",(long)p);\n", r->lineno, r);
+		if (Tflag) print("%2fprintf(stderr, \"0x%%p: line %d: %R\\n\",(void*)p);\n", r->lineno, r);
 		if (nflag == 0) print("#line %d \"%s\"\n", r->lineno, infile);
 		print("%s\n%2break;\n", tmpl);
 	}
