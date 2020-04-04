@@ -10,8 +10,8 @@
 #define PREFIX(name) code##name		/* concatenate */
 #define VER(maj,min) #maj"."#min	/* stringify */
 
-#define VERSION "2.5"
-static char rcsid[] = "$Id: pburg.c,v " VERSION " 2017/11/16 09:41:42 prs Exp $";
+#define VERSION "2.7"
+static char rcsid[] = "$Id: pburg.c,v " VERSION " 2020/04/06 09:41:42 prs Exp $";
 static char *prefix = "yy";
 char *outfile = "select.c";
 char *infile = "<stdin>";
