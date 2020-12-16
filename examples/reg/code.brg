@@ -1,0 +1,45 @@
+%{
+#include <stdio.h>
+#include "node.h"
+#include "postfix.h"
+static int reg;
+static int sameVar(Node *p) {
+  return strcmp(LEFT_CHILD(p)->value.s,
+                LEFT_CHILD(RIGHT_CHILD(p))->value.s) ? MAX_COST : 1; }
+static int otherVar(Node *p) {
+  return strcmp(LEFT_CHILD(p)->value.s,
+                RIGHT_CHILD(RIGHT_CHILD(p))->value.s) ? MAX_COST : 1; }
+extern FILE *yyout;
+#define TRACE
+static void yytrace(NODEPTR_TYPE p, int eruleno, int cost, int bestcost);
+%}
+%include "y.tab.h"
+%term ASSIGN='=' ADD='+' END=';'
+%%
+file: END(expr)          1 { fprintf(yyout,"ret\n"); } 
+expr: ID                 1 { fprintf(yyout,"mov r%d, [%s]\n", reg, p->value.s); if (!reg) reg++; }
+expr: CONST              1 { fprintf(yyout,"mov r%d, %d\n", reg, p->value.i); if (!reg) reg++; }
+expr: ASSIGN(ID,expr)    1 { fprintf(yyout,"mov [%s], r0\n", LEFT_CHILD(p)->value.s); }
+expr: ADD(expr,expr)     1 { fprintf(yyout,"add r0, r1\n"); }
+expr: ADD(expr,CONST)    1 { fprintf(yyout,"add r0, %d\n", RIGHT_CHILD(p)->value.i); }
+expr: ADD(CONST,expr)    1 { fprintf(yyout,"add r0, %d\n", LEFT_CHILD(p)->value.i); }
+expr: ADD(CONST,CONST)   1 { fprintf(yyout,"mov r0, %d\n", LEFT_CHILD(p)->value.i + RIGHT_CHILD(p)->value.i); }
+expr: ASSIGN(ID,ADD(ID,expr)) sameVar { fprintf(yyout,"add [%s], r0\n", LEFT_CHILD(p)->value.s); }
+expr: ASSIGN(ID,ADD(expr,ID)) otherVar { fprintf(yyout,"add [%s], r0\n", LEFT_CHILD(p)->value.s); }
+expr: ASSIGN(ID,ADD(ID,CONST)) sameVar { fprintf(yyout,"incr [%s], %d\n", LEFT_CHILD(p)->value.s, RIGHT_CHILD(RIGHT_CHILD(p))->value.i); }
+expr: ASSIGN(ID,ADD(CONST,ID)) otherVar { fprintf(yyout,"incr [%s], %d\n", LEFT_CHILD(p)->value.s, LEFT_CHILD(RIGHT_CHILD(p))->value.i); }
+%%
+#ifndef NOTRACE
+extern char **yynames;
+static void yytrace(NODEPTR_TYPE p, int eruleno, int cost, int bestcost)
+{
+        int op = OP_LABEL(p);
+        YYCONST char *tname = yytermname[op] ? yytermname[op] : "?";
+
+        if (debugNode) fprintf(stderr, "%p:%s matched %s with cost %d vs. %d\n", p, tname, yystring[eruleno], cost, bestcost);
+        if (cost >= MAX_COST && bestcost >= MAX_COST) {
+                fprintf(stderr, "%p:%s NO MATCH %s with cost %d vs. %d\n", p, tname, yystring[eruleno], cost, bestcost);
+                printNode(p, stderr, yynames);
+        }
+}
+#endif

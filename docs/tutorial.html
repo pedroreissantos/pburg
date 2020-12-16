@@ -1,0 +1,465 @@
+<html>
+<head>
+<title>Compiler construction and code generation in C with lex, yacc and pburg</title>
+</head>
+<BODY BGCOLOR="B5BDD6" link=red vlink=green>
+
+<h1>Compiler construction and code generation in C with lex, yacc and pburg</h1>
+
+<b>
+Pedro Reis dos Santos<br>
+University of Lisboa<br>
+(C)IST, 2020<br>
+</b>
+
+<div class="sectiontoc">
+<ul>
+<li><a href="#intro">Introduction</a></li>
+<li><a href="#over">Overview</a></li>
+<li><a href="#scan">Lexical analysis</a></li>
+<li><a href="#ast">Abstract syntax tree</a></li>
+<li><a href="#gram">Syntactical analysis</a></li>
+<li><a href="#postfix">Postfix code generation</a></li>
+<li><a href="#code">Code selection</a></li>
+<li><a href="#example">Example execution</a></li>
+<li><a href="#spec">File specification</a></li>
+</ul>
+
+<H2><a name="intro"></a>1. Introduction</H2>
+Modern compiler construction usually relies on tools to ease and speed up the
+compiler development. Traditional tools for lexical and sintactical analysis
+are <i>lex</i> and <i>yacc</i>, developed for C-like languages.
+<p>
+The lex tool uses a regular grammar to describe the language description and
+break it into tokens. Irrelevant input, such as comments or blanks, is ignored
+and produces no tokens.
+<p>
+The yacc tool parses the tokens with a context free grammar using a
+LALR(1) algorithm. If the input file can be reduced into the grammar
+target symbol the input is correct according to the grammar, otherwise an
+error is generated.
+<p>
+To provide a more useful output to the parsing procedure
+than a boolean result, an abstract syntax tree (AST) can be constructed.
+The AST is an in memory representation of the input that can be used to
+generate machine code.
+<p>
+Modern instruction selection tools associate AST chunks according to a
+target processor instruction description.
+Bottom-Up Rewrite Grammars (<i>burg</i>) tools provide optimal instruction
+selection by perform a double-pass on an AST.
+
+<H2><a name="over"></a>2. Overview</H2>
+
+The <b>pburg</b> tool, for <i>burg</i> code selection can be used to
+automate the code selection based on an abstrat syntax tree.
+<p>
+In order to illustrate the complete process, a trivial programming language
+is used. The language provides declarations of global variables bound to
+character string or integer literals.
+Only the integer arithmetic addition expression is provided.
+The values of both types an be printed by a variable argument <tt>print</tt>
+statement. For example:
+<pre>
+x = 12;
+y = 45;
+s = " = ";
+{
+  print "x", s, x;
+  print "y", s, y;
+  print "x+y", s, x+y;
+  print "x+y+7", s, x+y+7;
+  print "dozen = ", 5+7;
+}
+</pre>
+
+<H3><a name="scan"></a>3 Lexical analysis</H3>
+
+The lexical analysis is performed by the <tt>lex</tt> tool:
+<pre>
+%{
+#include "node.h" /* for Node in yylval from the %union of gram.y */
+#include "y.tab.h"
+#include &lt;string.h&gt;
+%}
+%%
+print           return PRINT;
+[a-zA-Z][a-zA-Z0-9]*  yylval.s = strdup(yytext); return ID;
+\"[^"]*\"       yytext[yyleng-1]=0; yylval.s = strdup(yytext+1); return STR;
+[0-9]+                yylval.i = atoi(yytext); return INT;
+[ \n\t\r]+      ;
+\/\/.*          ;
+.               return *yytext;
+%%
+int yywrap() { return 1; }
+char *getyytext() { return yytext; }
+</pre>
+The scanner recognizes the <tt>print</tt> keyword, the variable identifier
+and literal strings and integers. White spaces and <tt>//</tt> comments
+are ignored, while all other single characters are returned to syntactical
+analyser.
+
+<H3><a name="ast"></a>4 abstract syntax tree</H3>
+
+Any package that provides binary tree can be used to describe de
+abstract syntax tree (AST). In the current example the
+<a href="../lib/node.h">node</a> structure is used.
+It provides each tree node with a label, the token.
+The leaf nodes are built according to the stored data type: <tt>nilNode</tt>
+for no data, <tt>intNode</tt> for integer values and <tt>strNode</tt> for
+character string values.
+Binary nodes <tt>binNode</tt> and unary nodes <tt>uniNode</tt> on accept
+<tt>Node*</tt> as arguments. Since the BURG selection
+tools only accept binary trees (at most) no other tree types are required.
+
+<H3><a name="gram"></a>5 Syntactical analysis</H3>
+The syntactical analysis is performed by the <tt>yacc</tt> tool.
+The AST is built in a syntax directed process, as the grammar is processed,
+as weel as any semantic verification, such as type checking.
+Additional tokens, besides those required by the lexical scanner, are
+defined for the identification of some AST nodes:
+<tt>%token NIL INSTRS PROG DECLS EXPR</tt>
+The AST <tt>Node</tt> are also stored in the:
+<pre>
+%union { char *s; Node *n; int i; }
+</pre>
+The grammar is:
+<pre>
+%%
+file: decls '{' instrs '}'    { Node *n = binNode(PROG, $1, $3); if (trace) printNode(n, 0, (char**)yyname); yyselect(n); }
+    ;
+decls:                  { $$ = nilNode(NIL); }
+     | decls decl       { $$ = binNode(DECLS, $1, $2); }
+     ;
+decl: ID '=' STR ';'    { $$ = binNode('=', strNode(ID, $1), strNode(STR, $3)); IDnew(STR, $1, 0); }
+    | ID '=' INT ';'    { $$ = binNode('=', strNode(ID, $1), intNode(INT, $3)); IDnew(INT, $1, 0); }
+    ;
+instrs:                 { $$ = nilNode(NIL); }
+      | instrs instr    { $$ = binNode(INSTRS, $1, $2); }
+      ;
+instr: PRINT strs ';'   { $$ = uniNode(PRINT, $2); }
+     ;
+strs: expr
+    | strs ',' expr     { $$ = binNode(EXPR, $1, $3); }
+    ;
+expr: ID                { $$ = strNode(ID, $1); $$-&gt;info = IDfind($1, 0); }
+    | INT               { $$ = intNode(INT, $1); $$-&gt;info = INT; }
+    | expr '+' expr     { $$ = binNode('+', $1, $3); if ($1-&gt;info == STR || $3-&gt;info == STR) yyerror("only integers can be added"); }
+    | STR               { $$ = strNode(STR, $1); $$-&gt;info = STR; }
+    ;
+</pre>
+<p>
+In order to represent "zero or more declarations" a left recursion is used
+in conjuntion with an empty rule.
+The empty rule build an AST <tt>NIL</tt> labeled leaf node.
+The recursion uses an AST with two branches, one for the repetition and
+another for the actual declaration, labeled <tt>DECLS</tt>
+
+The declaration of a string variable is a bit more complex.
+The AST for this rule must include two strings, the variable name and its
+initialized value. Since branches must be of the <tt>Node*</tt> type, the
+strings must first be converted into leaf string nodes (<tt>strNode</tt>).
+Then an attribute, named <tt>info</tt>, is associated with the AST node in
+order to provide language type information, a string (<tt>STR</tt>) in this
+case.
+Finally, the declared valiable (<tt>ID</tt>) is inserted into a symbol table
+(<a href="../lib/tabid.h">>tabid</a>).
+<pre>
+</pre>
+
+The remaining rules follow the same principle.
+The add expression must verify the language type of its arguments, since
+only integers can be added.
+To perform such semantic checking, the <tt>info</tt> attribute is tested,
+previously inserted into the AST node with <tt>setattr</tt>.
+The result of an add expression is always an integer, so this node is
+assigned a language type <tt>INT</tt>.
+<pre>
+</pre>
+
+<H3><a name="postfix"></a>6 Postfix code generation</H3>
+
+Register optimization can result in significant performance gains and the 
+number of available processor registers has been increasing over the years.
+However, a simple code generation procedure can use only two or three registers
+and saving most data on the stack. This removes register alocation from the
+code generation procedure and enables code selection to produce final code.
+The resulting code is almost as performant as when using a large register set,
+since most of the stack will be stored in primary cache, except for vector
+or structure indexing where a significant performance degradation is expected.
+<p>
+The <tt>postfix.h</tt> provides code generation macros for
+<b>intel</b> <i>32-bit</i> and <i>64-bit</i> architectures, as well as
+<b>arm</b> <i>32-bit</i> architecture.
+In the <i>32-bit</i> <b>intel</b> architecture <tt>postfix</tt> uses most
+registers, since only 7 are available and each one has a specific usage 
+as in a RISC architecture.
+<tt>postfix</tt> code generation for other architectures uses only a small
+register subset.
+<p>
+In order to select a given architecture a macro <tt>#define</tt> must be
+defined prior to including the <tt>postfix.h</tt> file:
+<ul>
+<li><tt>pfARM</tt> for <i>32-bit</i> <b>arm</b> assembler output;</li>
+<li><tt>pfAMD64</tt> for <i>64-bit</i> <b>intel</b> assembler output;</li>
+<li><tt>pfX64</tt> for <i>64-bit</i> <b>AT&amp;T</b> assembler output;</li>
+<li><tt>pfI386</tt> for <i>32-bit</i> <b>intel</b> assembler output;</li>
+<li><tt>pfI386GAS</tt> for <i>32-bit</i> <b>AT&amp;T</b> assembler output;</li>
+<li><tt>pfDEBUG</tt> for code generation debug;</li>
+<li><tt>pfNUM</tt> for bytecode generation.</li>
+</ul>
+If ommited, the default architecture is use, currently <tt>X64</tt>.
+
+The macros expansions correspond to the <tt>postfix</tt> target instructions
+that are converted into machine code instructions strings dictionary values.
+Since <b>C</b> compiler concatenate sequences of literal strings, several
+<tt>postfix</tt> instructions can be used in sequence as a single
+<tt>printf</tt> format.
+In order to add two integers, for instance <tt>12+34</tt>:
+<pre>
+#define pfARM
+#include &lt;postfix.h&gt;
+printff(pfIMM pfIMM pfADD, 12, 34)
+</pre>
+the result is stored on the top of the stack and can be printed by calling
+the appropriate routine:
+<pre>
+print(pfCALLpfEXTRN, "printi", "printi")
+</pre>
+The <tt>postfix</tt> operation, or dictionary keys, are explained in the
+<a href="../examples/lib/postfix.html">postfix reference</a>.
+
+<H3><a name="code"></a>7 Code selection</H3>
+
+Code selection is the first step on code generation.
+Using a code generation tool, such as BURG selection tools, an optimal code
+selction can be achieved, That is, the total cost of all generated
+instructions is minimal.
+The cost of each rules can be expressed as execution cicles of the generated
+instructions, or any other metric, and the tool globaly minimizes such cost.
+<p>
+Once target machine instructions have been selected, registers can be assigned
+to each instruction. However, if no registers are available at a certain point
+aditional instructions must be inserted.
+<p>
+Although the <b>pburg</b> code generation tool can be used to generate
+instruction for subsequent register alocation, in this tutorial
+<tt>postfix</tt> is used.
+Therefore final machine code is generated and register alocation is necessary.
+<p>
+Using the same principle as <b>lex</b> or <b>yacc</b>, <b>pburg</b> 
+uses a <tt>%%</tt> separated file format, with declarations, grammar and
+additional code.
+<p>
+Additional information on the <b>pburg</b> specification and code
+selection grammar rules is available at the <a href="pburg.html">pburg
+reference</a>.
+<p>
+As in the <b>yacc</b> tool, a <tt>%start</tt> declaration can be used to
+define the grammar target symbol. If ommited, the target symbol is the
+first non-terminal in the grammar.
+As in the <b>yacc</b> tool, terminal symbols must be declared, either
+explicitly with a <tt>%term</tt> declaration or with a <tt>%include</tt>
+declaration that imports all <tt>#define</tt> declaration in the file.
+For instance, a <tt>%include&lt;y.tab.h&gt;</tt> include all <tt>%token</tt>
+symbols declared in a <b>yacc</b> grammar description.
+This allows the use of <b>yacc</b> terminal symbols to tag the AST nodes.
+
+The declarations section for the tool selection in the above example can be:
+<pre>
+%{
+#include &lt;stdio.h&gt;
+#include "node.h"
+#include "y.tab.h" /* for STR and INT in isSTR and isINT */
+#include "postfix.h"
+extern FILE *yyout;
+static int lbl;
+static char *mklbl(int n);
+static int isSTR(Node *p) { return p-&gt;info == STR ? 1 : MAX_COST; }
+static int isINT(Node *p) { return p-&gt;info == INT ? 1 : MAX_COST; }
+%}
+%include "y.tab.h"
+%term ASSIGN='=' ADD='+'
+</pre>
+The <tt>y.tab.h</tt> file must be included twice, once by the <b>C</b>
+compiler for the variable cost rotines <tt>isSTR</tt> and <tt>isINT</tt>,
+and again by the code selection tool (<tt>%include "y.tab.h"</tt>) as
+terminal symbols in the grammar.
+<p>
+The AST nodes are tagged by integers. These can be <b>yacc</b> <tt>tokens</tt>
+for value graeter than 255 or single caracters. Unlike <b>yacc</b>,
+single characters cannot be used directly as character literal and must be
+converted into grammar terminals using a <tt>%term</tt> declaration.
+Here they can be initialyzed to decimal integer values or ASCII characters
+(as in the example).
+<p>
+The grammar itself is composed of a left side non terminal symbol and a right
+side tree pattern, followed by an optional cost and an optional code block:
+<pre>
+%%
+prog: PROG(decls,instrs)  4 { fprintf(yyout, pfIMM pfPOP pfLEAVE pfRET, 0); } 
+decls: NIL                  { fprintf(yyout, pfEXTRN pfEXTRN pfEXTRN, "_println", "_prints", "_printi"); }
+decls: DECLS(decls, decl)
+decl: ASSIGN(ID,STR)        { fprintf(yyout, pfTEXT pfALIGN pfLABEL pfSTR, p-&gt;CHILD(0)-&gt;value.s, p-&gt;CHILD(1)-&gt;value.s); } 
+decl: ASSIGN(ID,INT)        { fprintf(yyout, pfTEXT pfALIGN pfLABEL pfINTEGER, p-&gt;CHILD(0)-&gt;value.s, p-&gt;CHILD(1)-&gt;value.i); } 
+instrs: NIL   1 { fprintf(yyout, pfTEXT pfALIGN pfGLOBL pfLABEL pfSTART, "_main", pfFUNC, "_main"); }
+instrs: INSTRS(instrs, instr)    { /* no code between instructions */ }
+instr: PRINT(strs) 1 { fprintf(yyout, pfCALL, "_println"); }
+strs: EXPR(strs,str) 2 { fprintf(yyout, pfARG1 pfCALL pfTRASH, "_prints", pfWORD); }
+strs: EXPR(strs,expr) 2 { fprintf(yyout, pfARG1 pfCALL pfTRASH, "_printi", pfWORD); }
+strs: str 2 { fprintf(yyout, pfARG1 pfCALL pfTRASH, "_prints", pfWORD); }
+strs: expr 2 { fprintf(yyout, pfARG1 pfCALL pfTRASH, "_printi", pfWORD); }
+str: ID isSTR { fprintf(yyout, pfADDR, p-&gt;value.s); }
+str: STR 1 { lbl++; fprintf(yyout, pfRODATA pfALIGN pfLABEL pfSTR pfTEXT pfADDR, mklbl(lbl), p-&gt;value.s, mklbl(lbl)); }
+expr: ID isINT { fprintf(yyout, pfADDRV, p-&gt;value.s); }
+expr: INT 1 { fprintf(yyout, pfIMM, p-&gt;value.i); }
+expr: ADD(expr, expr) 1 { fprintf(yyout, pfADD); }
+expr: ADD(INT, INT) 1 { fprintf(yyout, pfIMM, p-&gt;CHILD(0)-&gt;value.i + p-&gt;CHILD(1)-&gt;value.i); }
+%%
+static char *mklbl(int n) {
+  static char buf[20];
+  sprintf(buf, "_#i%d", n);
+  return strdup(buf);
+}
+</pre>
+The code blocks are executed as the AST patterns are selected, from leafs to
+root.
+<p>
+The target language is defined as a set of integer or string variable
+declarations followed by a set of print instructions.
+Each print instruction accepts a variable number of string or integer
+expressions.
+The string expressions are only string literals or string variables.
+The integer expressions can use integer literals or variables that can be added.
+<p>
+The AST root node, labeled <tt>PROG</tt> has two branches:
+the left branch describes de declarations, while the right node describes
+de instructions.
+If both branches were successfuly selected the rule reduces to a <b>prog</b>
+non-terminal and the code is generated.
+The rule has a cost <b>4</b> since four <tt>postfix</tt> instructions are
+generated (<tt>IMM POP LEAVE RET</tt>).
+The instructions perform a function return on the target language, using the
+immediate <tt>0</tt> as a return value.
+The routine arguments are the tree node <tt>n</tt>, the <tt>postfix</tt>
+code generation macros, and the output file <tt>yyout</tt>.
+<p>
+The startup code for the target language function <tt>_main</tt> is
+generated by the first reduced rule, that is the empty instructions rule
+since instructions are left recursive in the parsing grammar.
+The cost is <b>1</b> since only the <tt>START</tt> <b>postfix</b> operation
+produces executable code. All other operations are assembler declarations.
+The <tt>START</tt> operation builds a function frame to contain local values
+and is later removed by the <tt>LEAVE</tt> operation.
+<p>
+An integer literal expression pushes an immediate value to the stack with a
+<tt>IMM</tt> operation.
+The adition <tt>ADD</tt> pops two expressions (<tt>expr</tt>) from the stack and pushes
+the result back and takes no arguments.
+<p>
+All the code can be generated by selecting a single AST node label on each
+rule. This approaches reduces the code selection to <b>visitor</b> pattern.
+However, an instruction selection tool can compare code generation alternatives
+and select the lowest cost for a given tree.
+If the addition operation is performed on two literal, for example, the
+adition can be performed on compile time, that is a <i>constant folding</i>
+optimization.
+The cost of adding two integers, using the two rules descibed above, is
+<b>3</b>: <b>1</b> for each literal and <b>1</b> for
+the <tt>ADD</tt> instruction.
+The rule pattern <b>ADD(INT,INT)</b> can be selected when the node labeled
+<tt>ADD</tt> contains two <tt>INT</tt> labeled branches.
+With a cost of <b>1</b>, since only an <tt>IMM</tt> instruction is generated,
+the rule is selected: <tt>expr : ADD(INT,INT)</tt>.
+Note that if one of the <tt>ADD</tt> branches is an <tt>ID</tt> branch, the
+pattern is not matched and an the <tt>ADD</tt> instruction must be generated.
+<p>
+Literal strings must be stored in a <b>read-only data segment</b> and a pointer
+to the first byte loaded into the stack: a <b>char*</b> in the <b>C</b>
+programming language.
+Each new string is assigned a new label and a global label counter
+(<tt>lbl</tt>) is used to generate <tt>L_</tt> prefixed label.
+Thus a string literal (<tt>STR</tt>) produces a string expression (<tt>str</tt>)
+by pushing its pointer to the stack.
+<p>
+In the target language declaration section string and integer variables can
+be declared and initialized.
+When this variables are accessed in the instruction section, the generated
+code depends on the variables type: a pointer is pushed to the stack for
+string while for an integer variable its value is loaded.
+The selection tool uses the same cost based for all rules, but in this case
+the node label is <tt>ID</tt> in both cases (an alternative is to used
+different labels for each data type).
+A variables cost procedure can be adopted.
+The selection tool invoques a programmer given routine to determine the cost
+of a given node. The programmer supplied routine receive the node and returns
+a cost.
+For an <tt>ID</tt> node, the node type or a symbol table can be looked-up.
+If the symbol is of the required type, a low cost is returned.
+Otherwise a high cost is returned forcing the selection tool to look for
+other code selection alternatives.
+<pre>
+str : ID isSTR
+expr : ID isINT
+</pre>
+
+Based on node type information previously stored by the parser, the
+variable cost routines return a cost of <tt>1</tt> when the identifier
+is of the requested type and the <b>pburg</b> <tt>MAX_COST</tt> macro otherwise.
+<pre>
+static int isSTR(Node *p) { return p-&gt;info == STR ? 1 : MAX_COST; }
+static int isINT(Node *p) { return p-&gt;info == INT ? 1 : MAX_COST; }
+</pre>
+
+<H2><a name="example"></a>8. Example execution</H2>
+
+When the specification is complete, examples can be used to produce machine code assembly files.
+<pre>
+int main() {
+  extern FILE *yyin;
+	yyin = fopen("example.inp", "r");
+	return yyparse();
+}
+</pre>
+The <tt>yyparse</tt> parser routine calls </tt>yylex</tt> scanner routine
+to retrieve the tokens generated from the input file and then calls the
+<tt>yyselect</tt> routine to performa the code selection and machine code
+generation.
+<pre>
+byacc -dv gram.y
+flex -l scan.l
+pburg -T code.brg
+gcc -o add lex.yy.c y.tab.c yyselect.c ../lib/libutil.a
+</pre>
+The utilities library <tt>lib/libutil.a</tt> must be first built in the
+<a hrer="../examples/lib">examples/lib</tt> directory and includes the
+AST implementation <tt>node</tt> and the symbol tables <tt>tabid</tt>.
+<p>
+The generated <tt>out.asm</tt> file can now be assembled and linked in a
+<b>linux-x64</b> environment:
+<pre>
+as out.asm -o out.o
+ld -o out out.o run/librun.a
+./out
+</pre>
+The runtime library <tt>run/librun.a</tt> must be first built in the
+<a hrer="../examples/run">examples/run</tt> directory.
+<p>
+Other enviroments and architectures can be generated by defining the
+appropriate <tt>postifx</tt> architecture, <b>arm</b> for instance:
+</pre>
+gcc -o add -DpfARM lex.yy.c y.tab.c yyselect.c ../lib/libutil.a
+</pre>
+Then an appropriate runtime must be used (see <a href="https://github.com/pedroreissantos/B-programming-language">B programming language</a>).
+
+The <b>pburg</b> trace code, which outputs tree selection option and costs
+can be actiavted by setting the <b>-T</b> option, as in te above example.
+For more information see the <b>pburg</b> <a href="../pburg.1">manual page</a>.
+
+<H2><a name="spec"></a>9. File specification</H2>
+
+The complete <a href="../examples/add">specification</a> for the target
+language can be found in the <a href="../examples">examples</a> directory.
+
+</body>
+</html>

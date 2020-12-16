@@ -1,0 +1,28 @@
+stack calling convention (stack ABI):
+- arguments are passed on the stack in reverse order (C alike)
+
+register calling convetions (register ABI):
+- the first N arguments are passed on registers, the remaining on the stack.
+
+* linux x64 register calling convention:
+- upto 16 arguments, 8 integers and 8 floating point, are passed on registers.
+	Registers are filled sequentially as arguments appear:
++ integer arguments: rdi, rsi, rdx, rcx, r8, r9
++ floating point arguments: xmm0 to xmm7
+! in f(double,double,int) the int is passed in rdi
+
+* windows x64 register calling convention:
+- the first 4 arguments are passed on registers.
+	Registers are filled positionally, according the position of the argument.
+	Before calling the routine, space must be reserved, as the arguments were passed on stack, for the calling routine to save them if needed. That is, the same stack space is allocated as in the stack calling convention.
++ integer arguments: rcx, rdx, r8, r9
++ floating point arguments: xmm0 to xmm3
+! in f(double,double,int) the int is passed in r8
+
+* arm 32 register calling convention:
+- upto 4 arguments are passed on registers (non-overlapping).
++ integer arguments: r0 to r3
++ floating point arguments: r0+r1 and r2+r3
+! in f(int,double,int)the first argument uses r0, the double uses r2+r3 and the last int is passed on stack.
+
+(C)Pedro Reis dos Santos, 2020

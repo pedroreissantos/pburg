@@ -1,0 +1,38 @@
+%{
+#include <stdio.h>
+#include "node.h"
+#include "y.tab.h" /* for STR and INT in isSTR and isINT */
+#include "postfix.h"
+extern FILE *yyout;
+static int lbl;
+static char *mklbl(int n);
+static int isSTR(Node *p) { return p->info == STR ? 1 : MAX_COST; }
+static int isINT(Node *p) { return p->info == INT ? 1 : MAX_COST; }
+%}
+%include "y.tab.h"
+%term ASSIGN='=' ADD='+'
+%%
+prog: PROG(decls,instrs)    { fprintf(yyout, pfIMM pfPOP pfRET, 0); } 
+decls: NIL                  { fprintf(yyout, pfEXTRN pfEXTRN pfEXTRN, "_println", "_prints", "_printi"); }
+decls: DECLS(decls, decl)
+decl: ASSIGN(ID,STR)        { fprintf(yyout, pfTEXT pfALIGN pfLABEL pfSTR, p->CHILD(0)->value.s, p->CHILD(1)->value.s); } 
+decl: ASSIGN(ID,INT)        { fprintf(yyout, pfTEXT pfALIGN pfLABEL pfINTEGER, p->CHILD(0)->value.s, p->CHILD(1)->value.i); } 
+instrs: NIL     { fprintf(yyout, pfTEXT pfALIGN pfGLOBL pfLABEL, "_main", pfFUNC, "_main"); }
+instrs: INSTRS(instrs, instr)    { /* no code between instructions */ }
+instr: PRINT(strs)  { fprintf(yyout, pfCALL, "_println"); }
+strs: EXPR(strs,str) { fprintf(yyout, pfARG1 pfCALL pfTRASH, "_prints", pfWORD); }
+strs: EXPR(strs,expr) { fprintf(yyout, pfARG1 pfCALL pfTRASH, "_printi", pfWORD); }
+strs: str { fprintf(yyout, pfARG1 pfCALL pfTRASH, "_prints", pfWORD); }
+strs: expr { fprintf(yyout, pfARG1 pfCALL pfTRASH, "_printi", pfWORD); }
+str: ID isSTR { fprintf(yyout, pfADDR, p->value.s); }
+str: STR { lbl++; fprintf(yyout, pfRODATA pfALIGN pfLABEL pfSTR pfTEXT pfADDR, mklbl(lbl), p->value.s, mklbl(lbl)); }
+expr: ID isINT { fprintf(yyout, pfADDRV, p->value.s); }
+expr: INT 1 { fprintf(yyout, pfIMM, p->value.i); }
+expr: ADD(expr, expr) 1 { fprintf(yyout, pfADD); }
+expr: ADD(INT, INT) 1 { fprintf(yyout, pfIMM, p->CHILD(0)->value.i + p->CHILD(1)->value.i); }
+%%
+static char *mklbl(int n) {
+  static char buf[20];
+  sprintf(buf, "_#i%d", n);
+  return strdup(buf);
+}

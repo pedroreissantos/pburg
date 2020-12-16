@@ -1,0 +1,101 @@
+%{
+#include <stdio.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+#include "node.h"
+#include "tabid.h"
+#include "postfix.h"
+
+static int sameVar(NODEPTR_TYPE p) {
+	return strcmp(LEFT_CHILD(p)->value.s, LEFT_CHILD(RIGHT_CHILD(p))->value.s) ? 1000 : 2;
+}
+
+#define TRACE
+static void yytrace(NODEPTR_TYPE p, int eruleno, int cost, int bestcost);
+
+extern FILE *yyout;
+extern int lbl;
+extern char *mklbl(int n);
+%}
+%term LIST=';' ASSIGN='=' ADD='+' SUB='-' MUL='*' DIV='/' MOD='%' LT='<' GT='>'
+%include "y.tab.h"
+%%
+stat:	LIST(stat,stat)	0 { char s[20]; sprintf(s, "line %d", p->line); fprintf(yyout, pfCOMM, s); }
+stat:	STRING		4 { char *l = mklbl(++lbl);
+				fprintf(yyout, pfRODATA pfALIGN pfLABEL pfSTR
+				pfTEXT pfADDR pfCALL pfCALL pfTRASH,
+				l, p->value.s, l, "_prints", "_println", pfWORD); }
+stat:	PRINT(reg)	3 { fprintf(yyout, pfCALL pfCALL pfTRASH,
+				"_printi", "_println", pfWORD); }
+stat:	READ		3 { fprintf(yyout, pfCALL pfPUSH pfADDRA, "_readi", p->value.s); }
+stat:	ASSIGN(VARIABLE,reg)	1 { fprintf(yyout, pfADDRA, p->CHILD(0)->value.s); }
+cond:	reg		1 { fprintf(yyout, pfJZ, mklbl(p->place = ++lbl)); }
+stat:	IF(cond,stat)	1 { fprintf(yyout, pfLABEL, mklbl(LEFT_CHILD(p)->place)); }
+%! IF with ELSE requires two labels
+if:	IF(cond,stat)	1 { fprintf(yyout, pfJMP pfLABEL,
+				mklbl(p->place = ++lbl), mklbl(LEFT_CHILD(p)->place)); }
+stat:	ELSE(if,stat)	1 { fprintf(yyout, pfLABEL, mklbl(LEFT_CHILD(p)->place)); }
+begin:	START		1 { fprintf(yyout, pfLABEL, mklbl(p->place = ++lbl)); }
+do:	DO(begin,cond)
+stat:	WHILE(do,stat)	1 { fprintf(yyout, pfJMP pfLABEL, mklbl(LEFT_CHILD(LEFT_CHILD(p))->place), mklbl(RIGHT_CHILD(LEFT_CHILD(p))->place)); }
+
+stat:	reg 1 { fprintf(yyout, pfTRASH, pfWORD); }
+reg:	VARIABLE 1 { fprintf(yyout, pfADDRV, p->value.s); }
+reg:	INTEGER 1 { fprintf(yyout, pfIMM, pfCAST p->value.i); }
+reg:	ADD(reg,reg)	1 { fprintf(yyout, pfADD); }
+reg:	SUB(reg,reg)	1 { fprintf(yyout, pfSUB); }
+reg:	UMINUS(reg)	1 { fprintf(yyout, pfNEG); } 
+reg:	MUL(reg,reg)	1 { fprintf(yyout, pfMUL); }
+reg:	DIV(reg,reg)	1 { fprintf(yyout, pfDIV); }
+reg:	MOD(reg,reg)	1 { fprintf(yyout, pfMOD); }
+reg:	EQ(reg,reg)	1 { fprintf(yyout, pfEQ); }
+reg:	NE(reg,reg)	1 { fprintf(yyout, pfNE); }
+reg:	LT(reg,reg)	1 { fprintf(yyout, pfLT); }
+reg:	LE(reg,reg)	1 { fprintf(yyout, pfLE); }
+reg:	GE(reg,reg)	1 { fprintf(yyout, pfGE); }
+reg:	GT(reg,reg)	1 { fprintf(yyout, pfGT); }
+
+%! optimizations
+cond:	LT(reg,reg)	1 { fprintf(yyout, pfJGE, mklbl(p->place = ++lbl)); }
+cond:	LE(reg,reg)	1 { fprintf(yyout, pfJGT, mklbl(p->place = ++lbl)); }
+cond:	GT(reg,reg)	1 { fprintf(yyout, pfJLE, mklbl(p->place = ++lbl)); }
+cond:	GE(reg,reg)	1 { fprintf(yyout, pfJLT, mklbl(p->place = ++lbl)); }
+cond:	EQ(reg,reg)	1 { fprintf(yyout, pfJNE, mklbl(p->place = ++lbl)); }
+cond:	NE(reg,reg)	1 { fprintf(yyout, pfJEQ, mklbl(p->place = ++lbl)); }
+stat:	ASSIGN(VARIABLE,ADD(VARIABLE,INTEGER))	sameVar {
+		fprintf(yyout, pfADDR pfINCR, LEFT_CHILD(p)->value.s, RIGHT_CHILD(RIGHT_CHILD(p))->value.i);
+	}
+%%
+#include "y.tab.h"
+extern char **yynames;
+extern int trace, errors, debugNode;
+
+static int data(int t, char *s, void *a, void *user) {
+	if (s) fprintf(yyout, pfLABEL pfCONST, s, pfCAST 0);
+	return 1;
+}
+
+void evaluate(Node *p) {
+	if (errors) return;
+	if (trace) printNode(p, stdout, yynames);
+	fprintf(yyout, pfTEXT pfALIGN pfGLOBL pfLABEL pfSTART, "_main", pfFUNC, "_main");
+	if (!yyselect(p) && trace) fprintf(stderr, "selection successful\n");
+	fprintf(yyout, pfIMM pfPOP pfLEAVE pfRET pfDATA, pfCAST 0);
+	IDevery(data,0);
+	fprintf(yyout, pfEXTRN pfEXTRN pfEXTRN pfEXTRN,
+		"_prints", "_printi", "_println", "_readi");
+}
+
+#ifndef NOTRACE
+static void yytrace(NODEPTR_TYPE p, int eruleno, int cost, int bestcost)
+{
+	int op = OP_LABEL(p);
+	YYCONST char *tname = yytermname[op] ? yytermname[op] : "?";
+	if (debugNode) fprintf(stderr, "%p:%s matched %s with cost %d vs. %d\n", (void*)p, tname, yystring[eruleno], cost, bestcost);
+	if (cost >= MAX_COST && bestcost >= MAX_COST) {
+		fprintf(stderr, "%p:%s NO MATCH %s with cost %d vs. %d\n", (void*)p, tname, yystring[eruleno], cost, bestcost);
+		printNode(p, stderr, yynames);
+	}
+}
+#endif

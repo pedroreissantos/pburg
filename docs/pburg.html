@@ -1,0 +1,210 @@
+<html>
+<head>
+<title>pburg (Bottom-Up Rewrite Grammar)</title>
+</head>
+<BODY BGCOLOR="B5BDD6" link=red vlink=green>
+
+<h1>pyburg (Bottom-Up Rewrite Grammar) instruction selection</h1>
+
+<b>
+Pedro Reis dos Santos<br>
+University of Lisboa<br>
+(C)IST, 2020<br>
+</b>
+
+<p>
+<b>pburg-2.7</b>
+<p>
+
+<div class="sectiontoc">
+<ul>
+<li><a href="#intro">Introduction</a></li>
+<li><a href="#rule">Patterns and costs</a></li>
+<li><a href="#cost">Variable costs</a></li>
+<li><a href="#postfix">Code generation</a></li>
+<li><a href="#example">Examples</a></li>
+</ul>
+
+<H2><a name="intro"></a>1. Introduction</H2>
+pburg is an instruction selection tool for compiler construction.
+The tools scans an abstract syntax tree (AST) for patterns
+that correspond to target processor instructions.
+If the processor provides alternatives for certain operations,
+the tool will select the sequence with a minimal global cost.
+The cost can be represented as the instruction latency,
+for performance minimization, or any other metric.
+The tool scans the AST twice, first labeling the alternative costs on
+each tree node for all possible pattern combinations,
+then a reduction generates the minimal cost alternative.
+<p>
+The rest of this document assumes that you are somewhat familiar with
+compiler theory, and the use of compiler
+construction tools such as lex and yacc.
+The specifics of instruction selection are available on the compiler literature, such as:
+<ul>
+<li>Engineering a compiler, Cooper and Torczon, 2nd Ed, 2011, Morgan kaufmann, 978-0120884780, chapter 11<!-- https://www.amazon.com/Engineering-Compiler-Keith-Cooper/dp/012088478X/-->
+</li><li>Modern compiler implementation in C, Appel, 2004, Cambridge university press, 978-0521607650, chapter 9<!-- https://www.amazon.com/Modern-Compiler-Implement-Andrew-Appel/dp/0521607655/ -->
+</li><li>Modern compiler design, Grune <i>et al.</i>, 2nd Ed, 2012, Springer, 978-1461446989, section 9.1.4<!--https://www.amazon.com/Modern-Compiler-Design-Dick-Grune/dp/1461446988/ -->
+</ul>
+<p>
+The <b>pburg</b> tool uses the same file description structure as
+<b>lex</b> and <b>yacc</b>.
+The input AST is at most a binary tree with each node labeled with the
+grammar terminal symbols.
+The AST can be build using any binary tree implementation.
+<p>
+
+<H2><a name="rule"></a>2. Patterns and costs</H2>
+
+A bottom-up rewrite grammar (BURG) is a context free grammar that describes the abilities of the target processor using a set of tree patterns to be matched with an actual abstract syntax tree (AST).
+The parsing of a target language example should produce an AST that can be scanned for tree patterns.
+If all nodes in the AST are matched by at least one pattern, the AST can be selected and the output assembler associated with each matched pattern generated.
+<p>
+The grammar for a trivial language that only performs aditions on literal integers can be described by:
+<pre>
+expr : INT
+expr : ADD(expr,expr)
+</pre>
+In this grammar all leaf nodes must be integer literals, nodes labeled <tt>INT</tt> and all branches are <tt>ADD</tt> labeled nodes with two branches.
+The <tt>expr</tt> non-terminal on the left hand side of each rule can be produced if the tree pattern on right and side matches the AST tree node being analysed.
+<p>
+Using a stack based processor, final code can be generated without any register allocation.
+The first rule pushes the immediate value to the stack: <tt>push dword imm</tt> for <b>intel i386</b> assembler format.
+The second rule must pop the arguments and push the added result: <tt>pop eax; add dword [esp], eax</tt>.
+Ignoring the latencies of each machine instruction we can use the number of machine instructions as the cost: <b>1</b> for the <tt>push</tt> in the first rule and <b>2</b> for the <tt>pop</tt> and </tt>add</tt> of the second rule.
+The costs are added after the pattern on the right hand side:
+<pre>
+expr : INT 1
+expr : ADD(expr,expr) 2
+</pre>
+<p>
+<b>pburg</b> supports the same input format as <b>lex</b> or <b>yacc</b>:
+<pre>
+%term INT ADD
+%%
+expr : INT 1 { printf("push dword %d\n", p-&gt;value.i); }
+expr : ADD(expr,expr) 2 { printf("pop eax\nadd dword [esp], eax\n"); }
+</pre>
+The code snipets, in braces, are called when the node matches the respective rule pattern.
+An implicit variable <b>p</b> of the <b>NODEPTR_TYPE</b> type pointing to the
+AST node selected.
+An AST implementation must define:
+<ul><li><b>NODEPTR_TYPE</b> the AST node type;
+</li><li><b>LEFT_CHILD(p)</b> must return the node's left branch or <b>NULL</b>
+if there is no left branch;
+</li><li><b>RIGHT_CHILD(p)</b> for the right node;
+</li><li><b>OP_LABEL(p)</b> for the node label;
+</li><li><b>STATE_TYPE</b> the pointer to a BURG defined state variable in each node (<b>void*</b> usualy);
+</li><li><b>STATE_LABEL(p)</b> access the state variable in each node (read and write).
+</ul>
+
+The <b>node</b> implementation in C (see <a href="../lib/node.h">node.h</a> and
+<a href="../lib/node.c">node.c</a>) defines:
+<pre>
+#define STATE_TYPE void*
+#define NODEPTR_TYPE Node*
+#define OP_LABEL(p) ((p)-&gt;attrib)
+#define LEFT_CHILD(p)  ((p)-&gt;type == nodeOpr &amp;&amp; (p)-&gt;value.sub.num &gt; 0 ? (p)-&gt;value.sub.n[0] : 0)
+#define RIGHT_CHILD(p) ((p)-&gt;type == nodeOpr &amp;&amp; (p)-&gt;value.sub.num &gt; 1 ? (p)-&gt;value.sub.n[1] : 0)
+#define STATE_LABEL(p) ((p)-&gt;state)
+</pre>
+<p>
+If only one AST tree node is matched by each rule, only the node label must match the respective grammar terminal symbol (<tt>INT</tt> or <tt>ADD</tt>), and the code selection tool behaves like a visitor pattern.
+But the compiler can perform constant-folding optimization by adding the two constants at compile time and generating the result as an immediate value:
+<pre>
+expr : ADD(INT,INT) 1 { printf("push dword %d\n",
+			                  LEFT_CHILD(p)-&gt;value.i +
+			                  RIGHT_CHILD(p)-&gt;value.i); }
+</pre>
+
+Note that the each terminal symbol can only be used with the same arity, i. e. the <tt>INT</tt> is leaf node (no branches), while the <tt>ADD</tt> must always take two branches (arity=2). Inconsistent arity will result in a grammar processing error.
+<p>
+Missing costs are assumed 0 (zero) and should be avoided if code is generated, since a no cost code can be emited repetedly by the tool.
+
+<H2><a name="cost"></a>6. Variable costs</H2>
+
+The true power of a selection tool can be unleashed when the target processor provides machine instruction that match more than one node.
+For instance, if we add variables to our trivial language, the grammar can become:
+<pre>
+expr : INT
+expr : ADD(expr,expr)
+expr : ID
+expr : ASSIGN(ID,expr)
+</pre>
+For most processors each rule match a single machine instruction, but we can provide speed-ups for assigning literals i(<b>x=1</b>) and incrementing variables (<b>x=x+1</b>) without changing the language or the tree construction.
+<pre>
+expr : ASSIGN(ID,INT)
+expr : ASSIGN(ID,ADD(ID,INT))
+</pre>
+The second rule only is an increment if both <tt>ID</tt>s in the pattern match the same variable.
+This requires not only a tree pattern match but also matching <tt>ID</tt>s.
+This is done through a user defined matching function:
+<pre>
+static int sameVar(NODEPTR_TYPE p) {
+    return strcmp(LEFT_CHILD(p)-&gt;value.s, LEFT_CHILD(RIGHT_CHILD(p))-&gt;value.s) ? 1000 : 2;
+}
+</pre>
+The function is called only for matching tree patterns, so the left node is
+always an <tt>ID</tt> and the other <tt>ID</tt> is on the left of the right
+node, and the <tt>strcmp</tt> compares both <tt>ID</tt>s.
+The return value is the instruction's cost if the <tt>ID</tt>s match or a
+very high value (<tt>1000</tt> for instance) if there is no match.
+The high value makes the alternative rules less costly, converting the
+<tt>ID</tt>s and the <tt>INT</tt> to <tt>expr</tt> and performing a regular
+<tt>ADD</tt> and <tt>ASSIGN</tt>, with a total cost of <tt>5</tt> (one for
+each pattern match.
+Please note that the function is called to determine the cost during the
+labeling process, not during the reduction process, an may be called
+multiple times, whenever the pattern is matched.
+The cost function must be in the same module, or refered by its full path,
+and can only depend on information available at the start of the labeling
+process.
+Since the function returns the cost, it is placed in the grammar after the
+pattern:
+<pre>
+expr : ASSIGN(ID,ADD(ID,INT)) sameVar
+</pre>
+
+The same principle can be applyed to distinguish expressions of different
+data types:
+<pre>
+intexpr : ID isInteger
+strexpr : ID isString
+realexpr : ID isReal
+</pre>
+based on type information included in the tree nodes or a symbol table.
+Then, <tt>ADD</tt> operations, for instance, can be distinguished based on
+grammar non-terminals:
+<pre>
+intexpr : ADD(intexpr,intexpr) 1
+strexpr : ADD(strexpr,strexpr) 30
+realexpr : ADD(realexpr,realexpr) 7
+</pre>
+
+<H2><a name="postfix"></a>7. Code generation</H2>
+
+The code generation can produce a list of instructions on virtual registers,
+for posterior register assignment.
+However, if performance is not critical, a small number of registers can be
+previously assigned and final machine code generated directly:
+see <a href="../exs/reg">reg</a> example.
+<p>
+A sistematic approach can use a small number of registers and the stack,
+using the processor as a stack machine. 
+This approach has a small performance penalization in modern processore
+since most of the stack will be acessible in primary cache.
+The <a href="postfix.html">postfix</a> macros provide macros for such code
+generation for <b>intel</b> (<tt>32</tt> and <tt>64</tt> bit architectures
+in <i>intel</i> and <i>AT&amp;T</i> assembler formats) as well as <b>arm</b>
+<tt>32</tt> bit.
+
+<H2><a name="example"></a>8. Examples</H2>
+
+The <a href="tutorial.html">tutorial</a>
+describes the construction of a simple application example.
+
+The <tt>examples</tt> directory of the <b>pyburg</b> distribution contains several simple examples.
+Please consult a compilers textbook for the theory and underlying implementation details of code selection. Engineering a compiler.
+
+</body>
+</html>
