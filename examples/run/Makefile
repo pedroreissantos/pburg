@@ -2,7 +2,7 @@ RUN=run
 CFLAGS=-g -fno-stack-protector # when __stack_chk_fail in Ubunto
 BOOT=$(RUN).o # bootstrap runtime for a C compiler
 RUNTIME=lib$(RUN).a # stand-alone runtime
-OBJ=linux64.o lib64.o sys64.o wrap.o dblwrap.o
+OBJ=linux64.o lib64.o sys64.o wrap.o dblwrap.o char.o cwrap.o
 CC=gcc
 
 all: $(RUNTIME) $(BOOT)

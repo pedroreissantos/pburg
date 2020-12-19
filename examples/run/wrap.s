@@ -1,4 +1,4 @@
-# COMM wrap-1.0 (C)prs, 2020 generated at Thu Dec 10 15:08:21 2020
+# COMM wrap-1.0 (C)prs, 2020 generated at Sat Dec 19 15:07:50 2020
 
 # GLOBL
 .globl	atoi	# :function
@@ -156,5 +156,59 @@ readi:
 .extern	_readi
 # CALL
 	call	_readi
+# RET
+	ret
+# GLOBL
+.globl	_putstr	# :function
+# LABEL
+_putstr:
+	movq	8(%rsp), %rdi
+# EXTRN
+.extern	prints
+# CALL
+	call	prints
+# RET
+	ret
+# GLOBL
+.globl	_putint	# :function
+# LABEL
+_putint:
+	movq	8(%rsp), %rdi
+# EXTRN
+.extern	printi
+# CALL
+	call	printi
+# RET
+	ret
+# GLOBL
+.globl	_getint	# :function
+# LABEL
+_getint:
+# EXTRN
+.extern	readi
+# CALL
+	call	readi
+# RET
+	ret
+# GLOBL
+.globl	_getstr	# :function
+# LABEL
+_getstr:
+	movq	8(%rsp), %rdi
+	movq	16(%rsp), %rsi
+# EXTRN
+.extern	readln
+# CALL
+	call	readln
+# RET
+	ret
+# GLOBL
+.globl	_getchar	# :function
+# LABEL
+_getchar:
+# EXTRN
+.extern	readb
+# CALL
+	call	readb
 # RET
 	ret
