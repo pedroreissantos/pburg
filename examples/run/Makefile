@@ -8,7 +8,7 @@ CC=gcc
 all: $(RUNTIME) $(BOOT)
 
 $(RUNTIME): dbl.o $(OBJ)
-	ar crl $@ $?
+	ar crv $@ $?
 
 $(BOOT): dbl.o $(OBJ)
 	ld -r -o  $@ $^
